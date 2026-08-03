@@ -1,4 +1,3 @@
-
 /* ============================================================
    LIFEQUEST — script.js  v3.0
    Architettura: ogni operazione scrive prima localmente,
@@ -1363,22 +1362,23 @@ function bootApp() {
 
 window.addEventListener('load', async()=>{
   if(CUR) {
-    const u=getUser(CUR.id);
-    if(u) {
-      syncCUR(u); bootApp();
-      showLoading('Sincronizzazione dati dal cloud...');
-      try {
-        const fullData=await apiCall('GET_FULL_USER_DATA',{user_id:u.id});
-        const userData=await apiCall('LOGIN_USER',{user_id:u.id,skip_auth:true});
-        if(fullData.success) {
-          rebuildLocalFromCloud(u,fullData);
-          const updated=getUser(u.id);
-          if(updated){ syncCUR(updated); }
-        }
-      } catch(e){ console.warn('Auto-sync failed',e); }
-      hideLoading(); updateDashboard(); renderHome();
+    // Recupera utente dal DB locale, o usa CUR come fallback se il DB è stato svuotato
+    let u=getUser(CUR.id);
+    if(!u) {
+      u = CUR;
+      DB.users.push(u);
+      saveDB();
     }
+    syncCUR(u); bootApp();
+    showLoading('Sincronizzazione dati dal cloud...');
+    try {
+      const fullData=await apiCall('GET_FULL_USER_DATA',{user_id:u.id});
+      if(fullData.success) {
+        rebuildLocalFromCloud(u,fullData);
+        const updated=getUser(u.id);
+        if(updated){ syncCUR(updated); }
+      }
+    } catch(e){ console.warn('Auto-sync failed',e); }
+    hideLoading(); updateDashboard(); renderHome();
   }
 });
-
-
