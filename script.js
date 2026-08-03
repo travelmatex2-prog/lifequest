@@ -24,7 +24,7 @@
 
 /* ── 1. COSTANTI ── */
 
-const API_URL = "https://script.google.com/macros/s/AKfycbyMRayX-tydro9fYgpka-Ne_6H1JJbrI_B60PnthysA3eIuwhxnoRqvse-BWPvaDZIgBw/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbyL88AM7Pdtyl81VZxGPW2lOBS4npG72kLrdxygGUvVDjzPwUHlViwJ-6en4pNn-7uvLA/exec";
 
 const DB_KEY = 'lq_db_v2';
 
