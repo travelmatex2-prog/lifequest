@@ -368,7 +368,6 @@ async function doLogin() {
       saveUserSession(cloudUser);
       syncCUR(cloudUser);
       bootApp();
-      // Carica dati completi (quest, attività) dal cloud e poi risincronizza
       await loadFullUserDataFromCloud(cloudUser.id);
       renderHome();
       syncUserToCloud(cloudUser);
@@ -1873,14 +1872,9 @@ function viewProfile(userId) {
   const trophies = u.trophies || [];
   const stats    = u.stats    || {};
   const wins     = DB.challenges.filter(c => c.winner_id === userId).length;
-
-  // Tutte le quest completate visibili (trasparenza), filtrate per quest pubbliche per altri
-  const visQuests = isMe
-    ? DB.quests.filter(q => q.user_id === userId && q.completed)
-    : DB.quests.filter(q => q.user_id === userId && q.completed);
-  const visBooks = DB.books.filter(b => b.user_id === userId && b.completed);
-
-  const myUser = getUser(CUR.id);
+  const visQuests = DB.quests.filter(q => q.user_id === userId && q.completed);
+  const visBooks  = DB.books.filter(b => b.user_id === userId && b.completed);
+  const myUser   = getUser(CUR.id);
   const isFriend = (myUser?.friends || []).includes(userId);
 
   let html = `<div class="profile-header">
@@ -1888,10 +1882,10 @@ function viewProfile(userId) {
     <div class="profile-username">${u.username}</div>
     <div class="profile-rank">${rankTitle(u.level || 1)} · Lv.${u.level || 1}</div>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-      ${priv.show_xp !== false     ? `<span class="tag tag-xp">⚡ ${(u.xp_total || 0).toLocaleString()} XP</span>` : ''}
-      ${priv.show_streak !== false  ? `<span class="streak-badge">🔥 ${u.streak_days || 0} gg</span>` : ''}
+      ${priv.show_xp !== false    ? `<span class="tag tag-xp">⚡ ${(u.xp_total || 0).toLocaleString()} XP</span>` : ''}
+      ${priv.show_streak !== false ? `<span class="streak-badge">🔥 ${u.streak_days || 0} gg</span>` : ''}
       <span class="tag tag-green">🏆 ${wins} vittorie</span>
-      ${priv.show_books !== false   ? `<span class="tag tag-cyan">📚 ${visBooks.length} libri</span>` : ''}
+      ${priv.show_books !== false  ? `<span class="tag tag-cyan">📚 ${visBooks.length} libri</span>` : ''}
     </div>
     ${!isMe ? `<div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn-sm ${isFriend ? 'btn-sm-ghost' : 'btn-sm-primary'}" style="flex:1"
@@ -1906,8 +1900,7 @@ function viewProfile(userId) {
   <div style="padding:14px 20px">`;
 
   if (priv.show_stats !== false) {
-    html += `<div class="section-hd"><span class="section-title">Statistiche</span></div>
-    <div style="margin-bottom:14px">`;
+    html += `<div class="section-hd"><span class="section-title">Statistiche</span></div><div style="margin-bottom:14px">`;
     const maxV = Math.max(1, ...Object.values(stats).map(Number));
     Object.entries(STAT_COLORS).forEach(([k, col]) => {
       const v = stats[k] || 0;
@@ -1938,7 +1931,7 @@ function viewProfile(userId) {
 
   if (priv.show_books !== false && visBooks.length) {
     html += `<div class="section-hd"><span class="section-title">Libri completati</span></div>`;
-    visBooks.slice(0,8).forEach(b => {
+    visBooks.slice(0, 8).forEach(b => {
       html += `<div class="session-row">
         <div class="session-dot" style="background:var(--orange)"></div>
         <div class="session-info">
@@ -1949,10 +1942,9 @@ function viewProfile(userId) {
     });
   }
 
-  // Quest: sempre visibili per trasparenza (solo completate)
   if (priv.show_quests !== false && visQuests.length) {
     html += `<div class="section-hd" style="margin-top:10px"><span class="section-title">Quest completate (${visQuests.length})</span></div>`;
-    visQuests.slice(0,10).forEach(q => {
+    visQuests.slice(0, 10).forEach(q => {
       const d = q.completed_at ? new Date(q.completed_at).toLocaleDateString('it') : '';
       html += `<div class="session-row">
         <div class="session-dot"></div>
@@ -1965,12 +1957,11 @@ function viewProfile(userId) {
     if (visQuests.length > 10) html += `<div style="font-size:11px;color:var(--text3);padding:4px 0">...e altre ${visQuests.length - 10} quest</div>`;
   }
 
-  if (priv.show_stats === false && priv.show_quests === false && priv.show_books === false && !isMe) {
+  if (!isMe && priv.show_stats === false && priv.show_quests === false && priv.show_books === false) {
     html += '<div style="color:var(--text3);font-size:13px;padding:8px 0">Questo utente ha impostato il profilo privato.</div>';
   }
 
   html += '</div>';
-
   document.getElementById('profile-content').innerHTML = html;
   openModal('modal-profile');
 }
@@ -2120,7 +2111,9 @@ async function syncUserToCloud(u) {
           public_profile: u.public_profile || false,
           stats:          u.stats          || {},
           trophies:       u.trophies       || [],
-          privacy:        u.privacy        || {}
+          privacy:        u.privacy        || {},
+          friends:        u.friends        || [],
+          friend_names:   u.friend_names   || {}
         }
       })
     });
@@ -2147,8 +2140,8 @@ async function loadFullUserDataFromCloud(userId) {
     const res  = await fetch(API_URL + '?action=GET_FULL_USER_DATA&p=' + encodeURIComponent(JSON.stringify({ user_id: userId })));
     const data = await res.json();
     if (data.success) {
-      if (data.quests) data.quests.forEach(q => { if (!DB.quests.find(x => x.id === q.id)) DB.quests.push(q); });
-      if (data.activities) data.activities.forEach(a => { if (!DB.activities.find(x => x.id === a.id)) DB.activities.push(a); });
+      if (data.quests)      data.quests.forEach(q => { if (!DB.quests.find(x => x.id === q.id)) DB.quests.push(q); });
+      if (data.activities)  data.activities.forEach(a => { if (!DB.activities.find(x => x.id === a.id)) DB.activities.push(a); });
       saveDB();
     }
   } catch (e) { console.warn('Caricamento dati cloud fallito:', e); }
@@ -2160,29 +2153,23 @@ async function loadFullUserDataFromCloud(userId) {
    19. RICERCA UTENTI, AMICI, PRIVACY, SEGNALAZIONI
    ══════════════════════════════════════════════════════ */
 
-/* ── RICERCA UTENTE PER USERNAME ── */
 async function searchUser() {
   const query = document.getElementById('user-search-input')?.value.trim();
   if (!query || query.length < 2) { showToast('⚠️ Inserisci almeno 2 caratteri'); return; }
-
   const resultEl = document.getElementById('user-search-results');
   resultEl.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Ricerca in corso...</div>';
-
   try {
     const res  = await fetch(API_URL + '?action=SEARCH_USER&p=' + encodeURIComponent(JSON.stringify({ query })));
     const data = await res.json();
-
     if (!data.success || !data.users || !data.users.length) {
       resultEl.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessun utente trovato.</div>';
       return;
     }
-
-    const u = getUser(CUR.id);
-    const friends = u.friends || [];
-
+    const myUser  = getUser(CUR.id);
+    const friends = myUser?.friends || [];
     resultEl.innerHTML = data.users.map(found => {
-      const isFriend  = friends.includes(found.id);
-      const isMe      = found.id === CUR.id;
+      const isFriend = friends.includes(found.id);
+      const isMe     = found.id === CUR.id;
       return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bg3)">
         <div class="lb-avatar">${found.username[0].toUpperCase()}</div>
         <div style="flex:1">
@@ -2203,7 +2190,6 @@ async function searchUser() {
   }
 }
 
-/* ── AMICI ── */
 function addFriend(friendId, friendUsername) {
   const u = getUser(CUR.id);
   if (!u) return;
@@ -2214,7 +2200,7 @@ function addFriend(friendId, friendUsername) {
   u.friend_names[friendId] = friendUsername;
   saveDB(); syncCUR(u); syncUserToCloud(u);
   showToast('✅ ' + friendUsername + ' aggiunto agli amici!');
-  searchUser(); // refresh results
+  searchUser();
 }
 
 function removeFriend(friendId) {
@@ -2234,7 +2220,7 @@ function renderFriendsList() {
   const el      = document.getElementById('friends-list');
   if (!el) return;
   if (!friends.length) {
-    el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessun amico ancora. Cercane uno!</div>';
+    el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessun amico ancora. Cerca per username!</div>';
     return;
   }
   el.innerHTML = friends.map(id => `
@@ -2246,9 +2232,7 @@ function renderFriendsList() {
     </div>`).join('');
 }
 
-/* ── VISUALIZZA PROFILO ALTRUI DAL CLOUD ── */
 async function viewProfileById(userId) {
-  // Prova prima in locale
   let u = DB.users.find(x => x.id === userId);
   if (!u) {
     try {
@@ -2256,9 +2240,7 @@ async function viewProfileById(userId) {
       const data = await res.json();
       if (data.success) {
         u = data.user;
-        // Inietta temporaneamente nel DB per renderProfile
         if (!DB.users.find(x => x.id === u.id)) DB.users.push(u);
-        // Inietta anche le quest pubbliche
         if (data.quests) data.quests.forEach(q => { if (!DB.quests.find(x => x.id === q.id)) DB.quests.push(q); });
         if (data.books)  data.books.forEach(b  => { if (!DB.books.find(x  => x.id === b.id))  DB.books.push(b);  });
       }
@@ -2268,7 +2250,6 @@ async function viewProfileById(userId) {
   viewProfile(userId);
 }
 
-/* ── SEGNALA UTENTE ── */
 function openReportUser(userId, username) {
   const content = document.getElementById('report-content');
   if (!content) return;
@@ -2283,7 +2264,7 @@ function openReportUser(userId, username) {
       <option value="other">Altro</option>
     </select>
     <label class="input-label" style="margin-top:10px">DETTAGLI (opz.)</label>
-    <textarea class="sm" id="report-notes" placeholder="Descrivi il comportamento scorretto..."></textarea>
+    <textarea class="sm" id="report-notes" placeholder="Descrivi il comportamento scorretto..." style="height:80px"></textarea>
     <div class="btn-row" style="margin-top:12px">
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-report')">Annulla</button>
       <button class="btn-sm btn-sm-red"   style="flex:2" onclick="submitReport('${userId}','${username}')">🚩 Segnala</button>
@@ -2301,56 +2282,42 @@ async function submitReport(targetId, targetUsername) {
       body: JSON.stringify({
         action: 'SUBMIT_REPORT',
         payload: {
-          reporter_id:       CUR.id,
-          reporter_username: CUR.username,
-          target_id:         targetId,
-          target_username:   targetUsername,
-          reason,
-          notes,
-          reported_at:       new Date().toISOString()
+          reporter_id: CUR.id, reporter_username: CUR.username,
+          target_id: targetId, target_username: targetUsername,
+          reason, notes, reported_at: new Date().toISOString()
         }
       })
     });
     closeModal('modal-report');
     showToast('🚩 Segnalazione inviata. Grazie!');
-  } catch (e) {
-    showToast('⚠️ Errore nell'invio della segnalazione.');
-  }
+  } catch (e) { showToast('⚠️ Errore nell\'invio della segnalazione.'); }
 }
 
-/* ── IMPOSTAZIONI PRIVACY ── */
 function openPrivacySettings() {
   const u = getUser(CUR.id);
   const p = u?.privacy || {};
   const content = document.getElementById('privacy-content');
   if (!content) return;
-
   const toggle = (key, label) => {
-    const on = p[key] !== false; // default visibile
-    return `<div class="visibility-toggle" style="margin-bottom:10px">
-      <div class="toggle-track ${on ? 'on' : ''}" id="priv-${key}" onclick="togglePrivacy('${key}')">
+    const on = p[key] !== false;
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--bg3)">
+      <div class="toggle-track ${on ? 'on' : ''}" id="priv-${key}" onclick="this.classList.toggle('on')" style="cursor:pointer;flex-shrink:0">
         <div class="toggle-knob"></div>
       </div>
-      <span class="toggle-label">${label}</span>
+      <span style="font-size:13px;color:var(--text1)">${label}</span>
     </div>`;
   };
-
   content.innerHTML = `
     <div class="modal-title">🔒 Privacy del profilo</div>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:14px">Scegli cosa mostrano gli altri nel tuo profilo pubblico.</p>
-    ${toggle('show_stats',      '📊 Mostra statistiche')}
-    ${toggle('show_trophies',   '🏆 Mostra trofei')}
-    ${toggle('show_quests',     '⚔️ Mostra quest completate')}
-    ${toggle('show_books',      '📚 Mostra libri completati')}
-    ${toggle('show_streak',     '🔥 Mostra streak')}
-    ${toggle('show_xp',         '⚡ Mostra XP totali')}
-    <button class="btn-sm btn-sm-primary" style="width:100%;margin-top:6px" onclick="savePrivacy()">Salva impostazioni</button>`;
+    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Scegli cosa vedono gli altri nel tuo profilo.</p>
+    ${toggle('show_stats',    '📊 Mostra statistiche')}
+    ${toggle('show_trophies', '🏆 Mostra trofei')}
+    ${toggle('show_quests',   '⚔️ Mostra quest completate')}
+    ${toggle('show_books',    '📚 Mostra libri completati')}
+    ${toggle('show_streak',   '🔥 Mostra streak')}
+    ${toggle('show_xp',       '⚡ Mostra XP totali')}
+    <button class="btn-sm btn-sm-primary" style="width:100%;margin-top:14px" onclick="savePrivacy()">Salva impostazioni</button>`;
   openModal('modal-privacy');
-}
-
-function togglePrivacy(key) {
-  const el = document.getElementById('priv-' + key);
-  if (el) el.classList.toggle('on');
 }
 
 function savePrivacy() {
@@ -2364,7 +2331,6 @@ function savePrivacy() {
   closeModal('modal-privacy');
   showToast('🔒 Privacy aggiornata!');
 }
-
 
 /* ── 18. AVVIO ── */
 
