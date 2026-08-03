@@ -1,6 +1,25 @@
-
 /* ============================================================
    LIFEQUEST — script.js
+   Logica completa dell'applicazione
+   Struttura:
+     1. Costanti & configurazione
+     2. Database (localStorage)
+     3. Utilità
+     4. Sistema XP & livelli
+     5. Effetti visivi
+     6. Autenticazione
+     7. Navigazione
+     8. Dashboard
+     9. Quest (con Calendario integrato)
+    10. Libri
+    11. Trofei
+    12. Esami / Capitoli / Concetti
+    13. Vita / Attività
+    14. Sfide PvP
+    15. Statistiche
+    16. Export / Import
+    17. Modali
+    18. Avvio
    ============================================================ */
 
 /* ── 1. COSTANTI ── */
@@ -300,7 +319,7 @@ async function doRegister() {
       };
       DB.users.push(u);
       saveDB();
-      saveUserSession(u);
+      saveUserSession(u); // <--- Uso dello storage sicuro
       syncCUR(u);
       bootApp();
     } else {
@@ -332,6 +351,7 @@ async function doLogin() {
       if (!existing) {
         DB.users.push(cloudUser);
       } else {
+        // Merge: prendi i valori più alti tra locale e cloud
         cloudUser.xp_total    = Math.max(existing.xp_total    || 0, cloudUser.xp_total    || 0);
         cloudUser.level       = Math.max(existing.level       || 1, cloudUser.level       || 1);
         cloudUser.streak_days = Math.max(existing.streak_days || 0, cloudUser.streak_days || 0);
@@ -348,12 +368,9 @@ async function doLogin() {
       saveUserSession(cloudUser);
       syncCUR(cloudUser);
       bootApp();
-      err.textContent = '';
       await loadFullUserDataFromCloud(cloudUser.id);
-      syncQuestsToCloud();
       renderHome();
-      updateDashboard();
-      syncUserToCloud(getUser(cloudUser.id) || cloudUser);
+      syncUserToCloud(cloudUser);
     } else {
       err.textContent = result.message || 'Credenziali errate o account non trovato';
     }
@@ -464,6 +481,7 @@ function renderHome() {
 let qTab = 'todo';
 let selectedCalDate = new Date().toISOString().split('T')[0];
 
+/** Cambia il sotto-tab delle Quest — gestisce anche 'calendar'. */
 function switchQuestTab(t) {
   qTab = t;
   document.querySelectorAll('#screen-quest .tab').forEach((b, i) =>
@@ -472,6 +490,7 @@ function switchQuestTab(t) {
   renderQuests();
 }
 
+/** Rendering della lista quest (o del calendario se tab === 'calendar'). */
 function renderQuests() {
   const c = document.getElementById('quest-list-container');
 
@@ -509,6 +528,7 @@ function renderQuests() {
        </div>`;
 }
 
+/** Rendering del calendario quest del mese corrente. */
 function renderQuestCalendar(container) {
   const now = new Date();
   const y   = now.getFullYear();
@@ -577,11 +597,13 @@ function renderQuestCalendar(container) {
   container.innerHTML = html;
 }
 
+/** Seleziona una data nel calendario quest. */
 function selectQuestDate(dateStr) {
   selectedCalDate = dateStr;
   renderQuestCalendar(document.getElementById('quest-list-container'));
 }
 
+/** Apre la modal per modificare una quest dal calendario. */
 function openEditQuest(id) {
   const q = DB.quests.find(q => q.id === id);
   if (!q) return;
@@ -595,6 +617,7 @@ function openEditQuest(id) {
   openModal('modal-edit-quest');
 }
 
+/** Salva le modifiche a una quest dal calendario. */
 function saveEditedQuest() {
   const id = document.getElementById('eq-id').value;
   const q  = DB.quests.find(q => q.id === id);
@@ -611,6 +634,7 @@ function saveEditedQuest() {
   showToast('✅ Quest aggiornata!');
 }
 
+/** Elimina una quest dal calendario. */
 function deleteQuestFromCal() {
   const id = document.getElementById('eq-id').value;
   DB.quests = DB.quests.filter(q => q.id !== id);
@@ -620,6 +644,7 @@ function deleteQuestFromCal() {
   showToast('🗑️ Quest eliminata');
 }
 
+/** Aggiunge una nuova quest al DB. */
 function addQuest() {
   const name = document.getElementById('q-name').value.trim();
   if (!name) { showToast('⚠️ Inserisci un nome'); return; }
@@ -652,6 +677,10 @@ function addQuest() {
   showToast('⚔️ Quest aggiunta!');
 }
 
+/**
+ * Segna una quest come completata, assegna XP localmente
+ * e sincronizza con Google Sheets in background.
+ */
 async function toggleQuest(id, e) {
   if (e) e.stopPropagation();
   const q = DB.quests.find(q => q.id === id);
@@ -666,6 +695,7 @@ async function toggleQuest(id, e) {
   checkTrophies();
   renderQuests();
 
+  // Sincronizzazione con Google Sheets in background (non blocca l'UI)
   try {
     await fetch(API_URL, {
       method: 'POST',
@@ -688,6 +718,7 @@ async function toggleQuest(id, e) {
   }
 }
 
+/** Esporta le quest in CSV compatibile con Excel/Google Sheets. */
 function exportToExcelCSV() {
   let csv = 'ID,User_ID,Nome_Quest,Categoria,XP,Completata,Data_Completamento,Note\n';
 
@@ -1326,6 +1357,7 @@ function logActivity() {
   checkTrophies();
   renderLife();
 
+  // Sync con Google Sheets in background
   fetch(API_URL, {
     method: 'POST',
     body: JSON.stringify({
@@ -2108,38 +2140,13 @@ async function loadFullUserDataFromCloud(userId) {
     const res  = await fetch(API_URL + '?action=GET_FULL_USER_DATA&p=' + encodeURIComponent(JSON.stringify({ user_id: userId })));
     const data = await res.json();
     if (data.success) {
-      const u = getUser(userId);
-      if (u && data.user) {
-        u.xp_total    = Math.max(u.xp_total    || 0, data.user.xp_total    || 0);
-        u.level       = Math.max(u.level       || 1, data.user.level       || 1);
-        u.streak_days = Math.max(u.streak_days || 0, data.user.streak_days || 0);
-        if (data.user.stats) {
-          Object.keys(data.user.stats).forEach(k => {
-            u.stats = u.stats || {};
-            u.stats[k] = Math.max(u.stats[k] || 0, data.user.stats[k] || 0);
-          });
-        }
-        if (data.user.trophies?.length)    u.trophies     = data.user.trophies;
-        if (data.user.privacy)             u.privacy      = data.user.privacy;
-        if (data.user.friends?.length)     u.friends      = data.user.friends;
-        if (data.user.friend_names)        u.friend_names = data.user.friend_names;
-      }
-      if (data.quests) {
-        data.quests.forEach(q => {
-          if (!DB.quests.find(x => x.id === q.id)) DB.quests.push(q);
-        });
-      }
-      if (data.activities) {
-        data.activities.forEach(a => {
-          if (!DB.activities.find(x => x.id === a.id)) DB.activities.push(a);
-        });
-      }
+      if (data.quests)      data.quests.forEach(q => { if (!DB.quests.find(x => x.id === q.id)) DB.quests.push(q); });
+      if (data.activities)  data.activities.forEach(a => { if (!DB.activities.find(x => x.id === a.id)) DB.activities.push(a); });
       saveDB();
-      const updated = getUser(userId);
-      if (updated) syncCUR(updated);
     }
   } catch (e) { console.warn('Caricamento dati cloud fallito:', e); }
 }
+
 
 
 /* ══════════════════════════════════════════════════════
@@ -2147,8 +2154,8 @@ async function loadFullUserDataFromCloud(userId) {
    ══════════════════════════════════════════════════════ */
 
 async function searchUser() {
-  const query = (document.getElementById('user-search-input')?.value || '').trim();
-  if (query.length < 2) { showToast('⚠️ Inserisci almeno 2 caratteri'); return; }
+  const query = document.getElementById('user-search-input')?.value.trim();
+  if (!query || query.length < 2) { showToast('⚠️ Inserisci almeno 2 caratteri'); return; }
   const resultEl = document.getElementById('user-search-results');
   resultEl.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Ricerca in corso...</div>';
   try {
@@ -2169,7 +2176,7 @@ async function searchUser() {
           <div style="font-weight:700;font-size:14px">${found.username}</div>
           <div style="font-size:11px;color:var(--text3)">${rankTitle(found.level||1)} · Lv.${found.level||1} · ${(found.xp_total||0).toLocaleString()} XP</div>
         </div>
-        ${isMe ? '<span style="font-size:11px;color:var(--text3)">sei tu</span>' : `
+        ${isMe ? '' : `
           <button class="btn-sm ${isFriend ? 'btn-sm-ghost' : 'btn-sm-primary'}" style="font-size:11px"
             onclick="${isFriend ? `removeFriend('${found.id}')` : `addFriend('${found.id}','${found.username}')`}">
             ${isFriend ? '✓ Amico' : '+ Aggiungi'}
@@ -2193,7 +2200,6 @@ function addFriend(friendId, friendUsername) {
   u.friend_names[friendId] = friendUsername;
   saveDB(); syncCUR(u); syncUserToCloud(u);
   showToast('✅ ' + friendUsername + ' aggiunto agli amici!');
-  renderFriendsList();
   searchUser();
 }
 
@@ -2204,7 +2210,6 @@ function removeFriend(friendId) {
   if (u.friend_names) delete u.friend_names[friendId];
   saveDB(); syncCUR(u); syncUserToCloud(u);
   showToast('Amico rimosso.');
-  renderFriendsList();
   searchUser();
 }
 
@@ -2233,12 +2238,11 @@ async function viewProfileById(userId) {
     try {
       const res  = await fetch(API_URL + '?action=GET_FULL_USER_DATA&p=' + encodeURIComponent(JSON.stringify({ user_id: userId })));
       const data = await res.json();
-      if (data.success && data.user) {
+      if (data.success) {
         u = data.user;
         if (!DB.users.find(x => x.id === u.id)) DB.users.push(u);
         if (data.quests) data.quests.forEach(q => { if (!DB.quests.find(x => x.id === q.id)) DB.quests.push(q); });
         if (data.books)  data.books.forEach(b  => { if (!DB.books.find(x  => x.id === b.id))  DB.books.push(b);  });
-        saveDB();
       }
     } catch (e) { showToast('⚠️ Impossibile caricare il profilo'); return; }
   }
@@ -2321,13 +2325,12 @@ function savePrivacy() {
   if (!u) return;
   if (!u.privacy) u.privacy = {};
   ['show_stats','show_trophies','show_quests','show_books','show_streak','show_xp'].forEach(k => {
-    u.privacy[k] = !!document.getElementById('priv-' + k)?.classList.contains('on');
+    u.privacy[k] = document.getElementById('priv-' + k)?.classList.contains('on') !== false;
   });
   saveDB(); syncCUR(u); syncUserToCloud(u);
   closeModal('modal-privacy');
   showToast('🔒 Privacy aggiornata!');
 }
-
 
 /* ── 18. AVVIO ── */
 
@@ -2345,16 +2348,10 @@ function bootApp() {
   renderPendingRules();
 }
 
-// Auto-login se già autenticato — PATCH 3: carica anche dal cloud
-window.addEventListener('load', async () => {
+// Auto-login se già autenticato
+window.addEventListener('load', () => {
   if (CUR) {
     const u = getUser(CUR.id);
-    if (u) {
-      syncCUR(u);
-      bootApp();
-      await loadFullUserDataFromCloud(u.id);
-      renderHome();
-      updateDashboard();
-    }
+    if (u) { syncCUR(u); bootApp(); }
   }
 });
