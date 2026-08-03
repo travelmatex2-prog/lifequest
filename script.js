@@ -292,6 +292,59 @@ async function doRegister() {
   try {
     const response = await fetch(API_URL, {
       method: 'POST',
+      mode: 'cors',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify({
+        action: 'REGISTER_USER',
+        payload: { username: user, password_hash, pin_hash }
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      const u = {
+        id:           result.user_id,
+        username:     user,
+        password_hash,
+        pin_hash,
+        xp_total:     0,
+        level:        1,
+        streak_days:  0,
+        last_active:  today(),
+        stats:        { mente: 0, corpo: 0, cultura: 0, sociale: 0, produttività: 0, sfide: 0 }
+      };
+      DB.users.push(u);
+      saveDB();
+      syncCUR(u);
+      bootApp();
+    } else {
+      err.textContent = result.message || 'Errore durante la registrazione';
+    }
+  } catch (e) {
+    err.textContent = 'Errore di connessione al database.';
+  }
+}
+
+  const user = document.getElementById('r-user').value.trim();
+  const pass = document.getElementById('r-pass').value;
+  const pin  = document.getElementById('r-pin').value.trim();
+  const err  = document.getElementById('auth-error');
+
+  if (user.length < 3)       { err.textContent = 'Username: min 3 caratteri'; return; }
+  if (pass.length < 6)       { err.textContent = 'Password: min 6 caratteri'; return; }
+  if (!/^\d{4}$/.test(pin))  { err.textContent = 'PIN: esattamente 4 cifre';  return; }
+
+  const password_hash = await hashStr(pass + 'lq_salt_v2');
+  const pin_hash      = await hashStr(pin  + 'lq_pin_v2');
+
+  err.textContent = 'Registrazione in corso sul Cloud...';
+
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
       body: JSON.stringify({
         action: 'REGISTER_USER',
         payload: { username: user, password_hash, pin_hash }
@@ -337,6 +390,10 @@ async function doLogin() {
   try {
     const response = await fetch(API_URL, {
       method: 'POST',
+      mode: 'cors',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
       body: JSON.stringify({
         action: 'LOGIN_USER',
         payload: { username: user, password_hash }
@@ -346,7 +403,6 @@ async function doLogin() {
     const result = await response.json();
 
     if (result.success && result.user) {
-      // Salva l'utente nel DB locale e sincronizza la sessione
       let existing = DB.users.find(u => u.id === result.user.id);
       if (!existing) {
         DB.users.push(result.user);
@@ -360,7 +416,6 @@ async function doLogin() {
       err.textContent = result.message || 'Credenziali errate o account non trovato';
     }
   } catch (ex) {
-    // Fallback sul controllo locale se offline
     let u = DB.users.find(u => u.username.toLowerCase() === user.toLowerCase() && u.password_hash === password_hash);
     if (u) {
       syncCUR(u);
