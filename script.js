@@ -24,7 +24,7 @@
 
 /* ── 1. COSTANTI ── */
 
-const API_URL = "https://script.google.com/macros/s/AKfycbz0xAmheCwvWvQhAEOOt8ZGEH8zA4ojT2Do9MF73kCbgMVa9DTLQelHG1YIBkBJ847M_w/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwzVlNEXoDRuDKcR9tx_m_RlJ_6Li21NO0XFB_ImJsk-uAuxkvv93QBLRmEejnDMAsjbA/exec";
 const DB_KEY = 'lq_db_v2';
 
 const RANK_TITLES = [
