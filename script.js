@@ -352,35 +352,22 @@ async function doLogin() {
         Object.assign(existing, result.user);
       }
       saveDB();
-      saveUserSession(result.user); // <--- Uso dello storage sicuro
+      saveUserSession(result.user);
       syncCUR(result.user);
       bootApp();
     } else {
       err.textContent = result.message || 'Credenziali errate o account non trovato';
     }
   } catch (ex) {
-    // Fallback locale immediato se la rete o Google bloccano la chiamata
+    // Fallback locale in caso di errore di rete / 404 / blocco CORS
+    console.warn("Fallback offline attivato:", ex);
     let u = DB.users.find(u => u.username.toLowerCase() === user.toLowerCase());
     if (u) {
-      saveUserSession(u); // <--- Uso dello storage sicuro
+      saveUserSession(u);
       syncCUR(u);
       bootApp();
     } else {
-      const newU = {
-        id: 'usr_' + Date.now(),
-        username: user,
-        password_hash,
-        xp_total: 0,
-        level: 1,
-        streak_days: 0,
-        last_active: today(),
-        stats: { mente: 0, corpo: 0, cultura: 0, sociale: 0, produttività: 0, sfide: 0 }
-      };
-      DB.users.push(newU);
-      saveDB();
-      saveUserSession(newU); // <--- Uso dello storage sicuro
-      syncCUR(newU);
-      bootApp();
+      err.textContent = "Impossibile connettersi al Cloud e utente non trovato in locale.";
     }
   }
 }
