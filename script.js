@@ -286,35 +286,18 @@ async function doRegister() {
 
   const password_hash = await hashStr(pass + 'lq_salt_v2');
   const pin_hash      = await hashStr(pin  + 'lq_pin_v2');
-
   err.textContent = 'Registrazione in corso sul Cloud...';
 
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
-      body: JSON.stringify({
-        action: 'REGISTER_USER',
-        payload: { username: user, password_hash, pin_hash }
-      })
-    });
-
+    const payload = encodeURIComponent(JSON.stringify({ username: user, password_hash, pin_hash }));
+    const response = await fetch(`${API_URL}?action=REGISTER_USER&p=${payload}`);
     const result = await response.json();
 
     if (result.success) {
       const u = {
-        id:           result.user_id,
-        username:     user,
-        password_hash,
-        pin_hash,
-        xp_total:     0,
-        level:        1,
-        streak_days:  0,
-        last_active:  today(),
-        stats:        { mente: 0, corpo: 0, cultura: 0, sociale: 0, produttività: 0, sfide: 0 }
+        id: result.user_id, username: user, password_hash, pin_hash,
+        xp_total: 0, level: 1, streak_days: 0, last_active: today(),
+        stats: { mente: 0, corpo: 0, cultura: 0, sociale: 0, produttività: 0, sfide: 0 }
       };
       DB.users.push(u);
       saveDB();
@@ -339,18 +322,8 @@ async function doLogin() {
   err.textContent = 'Accesso al Cloud in corso...';
 
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
-      body: JSON.stringify({
-        action: 'LOGIN_USER',
-        payload: { username: user, password_hash }
-      })
-    });
-
+    const payload = encodeURIComponent(JSON.stringify({ username: user, password_hash }));
+    const response = await fetch(`${API_URL}?action=LOGIN_USER&p=${payload}`);
     const result = await response.json();
 
     if (result.success && result.user) {
