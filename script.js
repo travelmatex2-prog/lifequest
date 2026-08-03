@@ -7,7 +7,7 @@
    ============================================================ */
 
 /* ── 1. COSTANTI ── */
-const API_URL = "https://script.google.com/macros/s/AKfycbyp7uKrXx91u8obCjNvP9hLguG2qIa8OsmJTdqCsAfRCNp7dNBq_r49are-DhPKglBNjA/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxzw2MQ7Xhpz90e6QB56FNYXbo16IZH0os90BnWqafzS27BE9dLw6k9LR3QJcNEZF6B/exec";
 const DB_KEY  = 'lq_db_v4';
 
 const RANK_TITLES = [
