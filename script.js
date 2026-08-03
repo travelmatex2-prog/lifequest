@@ -328,55 +328,6 @@ async function doRegister() {
   }
 }
 
-  const user = document.getElementById('r-user').value.trim();
-  const pass = document.getElementById('r-pass').value;
-  const pin  = document.getElementById('r-pin').value.trim();
-  const err  = document.getElementById('auth-error');
-
-  if (user.length < 3)       { err.textContent = 'Username: min 3 caratteri'; return; }
-  if (pass.length < 6)       { err.textContent = 'Password: min 6 caratteri'; return; }
-  if (!/^\d{4}$/.test(pin))  { err.textContent = 'PIN: esattamente 4 cifre';  return; }
-
-  const password_hash = await hashStr(pass + 'lq_salt_v2');
-  const pin_hash      = await hashStr(pin  + 'lq_pin_v2');
-
-  err.textContent = 'Registrazione in corso sul Cloud...';
-
-  try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'REGISTER_USER',
-        payload: { username: user, password_hash, pin_hash }
-      })
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
-      const u = {
-        id:           result.user_id,
-        username:     user,
-        password_hash,
-        pin_hash,
-        xp_total:     0,
-        level:        1,
-        streak_days:  0,
-        last_active:  today(),
-        stats:        { mente: 0, corpo: 0, cultura: 0, sociale: 0, produttività: 0, sfide: 0 }
-      };
-      DB.users.push(u);
-      saveDB();
-      syncCUR(u);
-      bootApp();
-    } else {
-      err.textContent = result.message || 'Errore durante la registrazione';
-    }
-  } catch (e) {
-    err.textContent = 'Errore di connessione al database.';
-  }
-}
-
 async function doLogin() {
   const user = document.getElementById('l-user').value.trim();
   const pass = document.getElementById('l-pass').value;
@@ -446,7 +397,6 @@ async function doResetPin() {
   closeModal('modal-pin-reset');
   showToast('✅ Password aggiornata!');
 }
-
 
 /* ── 7. NAVIGAZIONE ── */
 
