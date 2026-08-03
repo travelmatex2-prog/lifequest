@@ -377,27 +377,6 @@ async function doLogin() {
   }
 }
 
-async function doResetPin() {
-  const user    = document.getElementById('pr-user').value.trim();
-  const pin     = document.getElementById('pr-pin').value.trim();
-  const newpass = document.getElementById('pr-newpass').value;
-  const errEl   = document.getElementById('pr-error');
-
-  if (!user || !pin || !newpass) { errEl.textContent = 'Compila tutti i campi'; return; }
-
-  const pinHash  = await hashStr(pin     + 'lq_pin_v2');
-  const passHash = await hashStr(newpass + 'lq_salt_v2');
-
-  const u = DB.users.find(u => u.username.toLowerCase() === user.toLowerCase() && u.pin_hash === pinHash);
-
-  if (!u) { errEl.textContent = 'Username o PIN errati'; return; }
-
-  u.password_hash = passHash;
-  saveDB();
-  closeModal('modal-pin-reset');
-  showToast('✅ Password aggiornata!');
-}
-
 /* ── 7. NAVIGAZIONE ── */
 
 function gotoTab(tab) {
