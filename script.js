@@ -368,6 +368,9 @@ async function doLogin() {
       saveUserSession(cloudUser);
       syncCUR(cloudUser);
       bootApp();
+      // Carica dati completi (quest, attività) dal cloud e poi risincronizza
+      await loadFullUserDataFromCloud(cloudUser.id);
+      renderHome();
       syncUserToCloud(cloudUser);
     } else {
       err.textContent = result.message || 'Credenziali errate o account non trovato';
@@ -1554,7 +1557,7 @@ function createChallenge() {
   const title = document.getElementById('pvp-title').value.trim();
   if (!title) { showToast('⚠️ Inserisci il titolo della sfida'); return; }
 
-  const stake = parseInt(document.getElementById('pvp-stake').value) || 100;
+  const stake = Math.min(20, Math.max(5, parseInt(document.getElementById('pvp-stake').value) || 20));
   const rep   = document.getElementById('pvp-rep-toggle').classList.contains('on');
   const code  = randCode();
 
@@ -1865,41 +1868,60 @@ function viewProfile(userId) {
   const u = DB.users.find(u => u.id === userId);
   if (!u) return;
 
-  const trophies  = u.trophies || [];
-  const stats     = u.stats    || {};
-  const pubQuests = DB.quests.filter(q => q.user_id === userId && q.completed && q.public).slice(0, 5);
-  const pubBooks  = DB.books.filter(b => b.user_id === userId && b.completed && b.public).slice(0, 5);
-  const wins      = DB.challenges.filter(c => c.winner_id === userId).length;
+  const isMe     = userId === CUR.id;
+  const priv     = u.privacy || {};
+  const trophies = u.trophies || [];
+  const stats    = u.stats    || {};
+  const wins     = DB.challenges.filter(c => c.winner_id === userId).length;
+
+  // Tutte le quest completate visibili (trasparenza), filtrate per quest pubbliche per altri
+  const visQuests = isMe
+    ? DB.quests.filter(q => q.user_id === userId && q.completed)
+    : DB.quests.filter(q => q.user_id === userId && q.completed);
+  const visBooks = DB.books.filter(b => b.user_id === userId && b.completed);
+
+  const myUser = getUser(CUR.id);
+  const isFriend = (myUser?.friends || []).includes(userId);
 
   let html = `<div class="profile-header">
     <div class="profile-avatar">${u.username[0].toUpperCase()}</div>
     <div class="profile-username">${u.username}</div>
     <div class="profile-rank">${rankTitle(u.level || 1)} · Lv.${u.level || 1}</div>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-      <span class="tag tag-xp">⚡ ${(u.xp_total || 0).toLocaleString()} XP</span>
-      <span class="streak-badge">🔥 ${u.streak_days || 0} gg</span>
+      ${priv.show_xp !== false     ? `<span class="tag tag-xp">⚡ ${(u.xp_total || 0).toLocaleString()} XP</span>` : ''}
+      ${priv.show_streak !== false  ? `<span class="streak-badge">🔥 ${u.streak_days || 0} gg</span>` : ''}
       <span class="tag tag-green">🏆 ${wins} vittorie</span>
-      <span class="tag tag-cyan">📚 ${DB.books.filter(b => b.user_id === userId && b.completed).length} libri</span>
+      ${priv.show_books !== false   ? `<span class="tag tag-cyan">📚 ${visBooks.length} libri</span>` : ''}
     </div>
+    ${!isMe ? `<div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-sm ${isFriend ? 'btn-sm-ghost' : 'btn-sm-primary'}" style="flex:1"
+        onclick="${isFriend ? `removeFriend('${userId}')` : `addFriend('${userId}','${u.username}')`}">
+        ${isFriend ? '✓ Amico' : '+ Aggiungi amico'}
+      </button>
+      <button class="btn-sm btn-sm-red" style="flex:1" onclick="openReportUser('${userId}','${u.username}')">🚩 Segnala</button>
+    </div>` : `<div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-profile');openPrivacySettings()">🔒 Privacy</button>
+    </div>`}
   </div>
-  <div style="padding:14px 20px">
-    <div class="section-hd"><span class="section-title">Statistiche</span></div>
+  <div style="padding:14px 20px">`;
+
+  if (priv.show_stats !== false) {
+    html += `<div class="section-hd"><span class="section-title">Statistiche</span></div>
     <div style="margin-bottom:14px">`;
+    const maxV = Math.max(1, ...Object.values(stats).map(Number));
+    Object.entries(STAT_COLORS).forEach(([k, col]) => {
+      const v = stats[k] || 0;
+      const p = Math.round((v / maxV) * 100);
+      html += `<div class="stat-bar-row">
+        <div class="stat-bar-label" style="color:${col}">${k}</div>
+        <div class="stat-bar-bg"><div class="stat-bar-fg" style="width:${p}%;background:${col}"></div></div>
+        <div class="stat-bar-val" style="color:${col}">${v}</div>
+      </div>`;
+    });
+    html += '</div>';
+  }
 
-  const maxV = Math.max(1, ...Object.values(stats).map(Number));
-  Object.entries(STAT_COLORS).forEach(([k, col]) => {
-    const v = stats[k] || 0;
-    const p = Math.round((v / maxV) * 100);
-    html += `<div class="stat-bar-row">
-      <div class="stat-bar-label" style="color:${col}">${k}</div>
-      <div class="stat-bar-bg"><div class="stat-bar-fg" style="width:${p}%;background:${col}"></div></div>
-      <div class="stat-bar-val" style="color:${col}">${v}</div>
-    </div>`;
-  });
-
-  html += '</div>';
-
-  if (trophies.length) {
+  if (priv.show_trophies !== false && trophies.length) {
     html += `<div class="section-hd"><span class="section-title">Trofei (${trophies.length})</span></div>
       <div class="trophy-grid" style="padding:0;margin-bottom:14px">`;
     trophies.forEach(t => {
@@ -1914,9 +1936,9 @@ function viewProfile(userId) {
     html += '</div>';
   }
 
-  if (pubBooks.length) {
+  if (priv.show_books !== false && visBooks.length) {
     html += `<div class="section-hd"><span class="section-title">Libri completati</span></div>`;
-    pubBooks.forEach(b => {
+    visBooks.slice(0,8).forEach(b => {
       html += `<div class="session-row">
         <div class="session-dot" style="background:var(--orange)"></div>
         <div class="session-info">
@@ -1927,21 +1949,24 @@ function viewProfile(userId) {
     });
   }
 
-  if (pubQuests.length) {
-    html += `<div class="section-hd" style="margin-top:10px"><span class="section-title">Quest completate</span></div>`;
-    pubQuests.forEach(q => {
+  // Quest: sempre visibili per trasparenza (solo completate)
+  if (priv.show_quests !== false && visQuests.length) {
+    html += `<div class="section-hd" style="margin-top:10px"><span class="section-title">Quest completate (${visQuests.length})</span></div>`;
+    visQuests.slice(0,10).forEach(q => {
+      const d = q.completed_at ? new Date(q.completed_at).toLocaleDateString('it') : '';
       html += `<div class="session-row">
         <div class="session-dot"></div>
         <div class="session-info">
           <div class="session-name">${q.name}</div>
-          <div class="session-time">${q.category} · ${q.xp_base} XP</div>
+          <div class="session-time">${q.category} · ${q.xp_base} XP${d ? ' · ' + d : ''}</div>
         </div>
       </div>`;
     });
+    if (visQuests.length > 10) html += `<div style="font-size:11px;color:var(--text3);padding:4px 0">...e altre ${visQuests.length - 10} quest</div>`;
   }
 
-  if (!pubBooks.length && !pubQuests.length && !trophies.length) {
-    html += '<div style="color:var(--text3);font-size:13px;padding:8px 0">Questo utente non ha ancora condiviso contenuti pubblici.</div>';
+  if (priv.show_stats === false && priv.show_quests === false && priv.show_books === false && !isMe) {
+    html += '<div style="color:var(--text3);font-size:13px;padding:8px 0">Questo utente ha impostato il profilo privato.</div>';
   }
 
   html += '</div>';
@@ -2081,18 +2106,263 @@ function doLogout() {
 async function syncUserToCloud(u) {
   if (!u) return;
   try {
-    await fetch(`${API_URL}?action=SYNC_USER_DATA&p=` + encodeURIComponent(JSON.stringify({
-      user_id:        u.id,
-      xp_total:       u.xp_total       || 0,
-      level:          u.level          || 1,
-      streak_days:    u.streak_days    || 0,
-      last_active:    u.last_active    || today(),
-      public_profile: u.public_profile || false,
-      stats:          u.stats          || {}
-    })));
+    await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'SYNC_USER_DATA',
+        payload: {
+          user_id:        u.id,
+          xp_total:       u.xp_total       || 0,
+          level:          u.level          || 1,
+          streak_days:    u.streak_days    || 0,
+          last_active:    u.last_active    || today(),
+          public_profile: u.public_profile || false,
+          stats:          u.stats          || {},
+          trophies:       u.trophies       || [],
+          privacy:        u.privacy        || {}
+        }
+      })
+    });
   } catch (e) {
-    console.warn('Sync cloud fallita:', e);
+    console.warn('Sync cloud fallita (offline?):', e);
   }
+}
+
+async function syncQuestsToCloud() {
+  if (!CUR) return;
+  const myQuests = DB.quests.filter(q => q.user_id === CUR.id);
+  if (!myQuests.length) return;
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'SYNC_QUESTS', payload: { user_id: CUR.id, quests: myQuests } })
+    });
+  } catch (e) { console.warn('Sync quest fallita:', e); }
+}
+
+async function loadFullUserDataFromCloud(userId) {
+  try {
+    const res  = await fetch(API_URL + '?action=GET_FULL_USER_DATA&p=' + encodeURIComponent(JSON.stringify({ user_id: userId })));
+    const data = await res.json();
+    if (data.success) {
+      if (data.quests) data.quests.forEach(q => { if (!DB.quests.find(x => x.id === q.id)) DB.quests.push(q); });
+      if (data.activities) data.activities.forEach(a => { if (!DB.activities.find(x => x.id === a.id)) DB.activities.push(a); });
+      saveDB();
+    }
+  } catch (e) { console.warn('Caricamento dati cloud fallito:', e); }
+}
+
+
+
+/* ══════════════════════════════════════════════════════
+   19. RICERCA UTENTI, AMICI, PRIVACY, SEGNALAZIONI
+   ══════════════════════════════════════════════════════ */
+
+/* ── RICERCA UTENTE PER USERNAME ── */
+async function searchUser() {
+  const query = document.getElementById('user-search-input')?.value.trim();
+  if (!query || query.length < 2) { showToast('⚠️ Inserisci almeno 2 caratteri'); return; }
+
+  const resultEl = document.getElementById('user-search-results');
+  resultEl.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Ricerca in corso...</div>';
+
+  try {
+    const res  = await fetch(API_URL + '?action=SEARCH_USER&p=' + encodeURIComponent(JSON.stringify({ query })));
+    const data = await res.json();
+
+    if (!data.success || !data.users || !data.users.length) {
+      resultEl.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessun utente trovato.</div>';
+      return;
+    }
+
+    const u = getUser(CUR.id);
+    const friends = u.friends || [];
+
+    resultEl.innerHTML = data.users.map(found => {
+      const isFriend  = friends.includes(found.id);
+      const isMe      = found.id === CUR.id;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bg3)">
+        <div class="lb-avatar">${found.username[0].toUpperCase()}</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14px">${found.username}</div>
+          <div style="font-size:11px;color:var(--text3)">${rankTitle(found.level||1)} · Lv.${found.level||1} · ${(found.xp_total||0).toLocaleString()} XP</div>
+        </div>
+        ${isMe ? '' : `
+          <button class="btn-sm ${isFriend ? 'btn-sm-ghost' : 'btn-sm-primary'}" style="font-size:11px"
+            onclick="${isFriend ? `removeFriend('${found.id}')` : `addFriend('${found.id}','${found.username}')`}">
+            ${isFriend ? '✓ Amico' : '+ Aggiungi'}
+          </button>
+          <button class="btn-sm btn-sm-ghost" style="font-size:11px" onclick="viewProfileById('${found.id}')">👁️</button>
+        `}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    resultEl.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Errore di connessione.</div>';
+  }
+}
+
+/* ── AMICI ── */
+function addFriend(friendId, friendUsername) {
+  const u = getUser(CUR.id);
+  if (!u) return;
+  if (!u.friends)      u.friends      = [];
+  if (!u.friend_names) u.friend_names = {};
+  if (u.friends.includes(friendId)) { showToast('Già nei tuoi amici!'); return; }
+  u.friends.push(friendId);
+  u.friend_names[friendId] = friendUsername;
+  saveDB(); syncCUR(u); syncUserToCloud(u);
+  showToast('✅ ' + friendUsername + ' aggiunto agli amici!');
+  searchUser(); // refresh results
+}
+
+function removeFriend(friendId) {
+  const u = getUser(CUR.id);
+  if (!u || !u.friends) return;
+  u.friends = u.friends.filter(id => id !== friendId);
+  if (u.friend_names) delete u.friend_names[friendId];
+  saveDB(); syncCUR(u); syncUserToCloud(u);
+  showToast('Amico rimosso.');
+  searchUser();
+}
+
+function renderFriendsList() {
+  const u       = getUser(CUR.id);
+  const friends = u?.friends || [];
+  const names   = u?.friend_names || {};
+  const el      = document.getElementById('friends-list');
+  if (!el) return;
+  if (!friends.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessun amico ancora. Cercane uno!</div>';
+    return;
+  }
+  el.innerHTML = friends.map(id => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bg3)">
+      <div class="lb-avatar">${(names[id]||'?')[0].toUpperCase()}</div>
+      <div style="flex:1;font-weight:600;font-size:13px">${names[id]||id}</div>
+      <button class="btn-sm btn-sm-ghost" style="font-size:11px" onclick="viewProfileById('${id}')">👁️</button>
+      <button class="btn-sm btn-sm-red"   style="font-size:11px" onclick="removeFriend('${id}')">✕</button>
+    </div>`).join('');
+}
+
+/* ── VISUALIZZA PROFILO ALTRUI DAL CLOUD ── */
+async function viewProfileById(userId) {
+  // Prova prima in locale
+  let u = DB.users.find(x => x.id === userId);
+  if (!u) {
+    try {
+      const res  = await fetch(API_URL + '?action=GET_FULL_USER_DATA&p=' + encodeURIComponent(JSON.stringify({ user_id: userId })));
+      const data = await res.json();
+      if (data.success) {
+        u = data.user;
+        // Inietta temporaneamente nel DB per renderProfile
+        if (!DB.users.find(x => x.id === u.id)) DB.users.push(u);
+        // Inietta anche le quest pubbliche
+        if (data.quests) data.quests.forEach(q => { if (!DB.quests.find(x => x.id === q.id)) DB.quests.push(q); });
+        if (data.books)  data.books.forEach(b  => { if (!DB.books.find(x  => x.id === b.id))  DB.books.push(b);  });
+      }
+    } catch (e) { showToast('⚠️ Impossibile caricare il profilo'); return; }
+  }
+  if (!u) { showToast('Utente non trovato.'); return; }
+  viewProfile(userId);
+}
+
+/* ── SEGNALA UTENTE ── */
+function openReportUser(userId, username) {
+  const content = document.getElementById('report-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="modal-title">🚩 Segnala utente</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Stai segnalando: <b>${username}</b></p>
+    <label class="input-label">MOTIVO</label>
+    <select class="sm" id="report-reason">
+      <option value="xp_farm">💰 Farming XP (task false o ripetute)</option>
+      <option value="challenge_abuse">⚔️ Abuso punteggi sfide</option>
+      <option value="fake_quests">📋 Quest inventate o non svolte</option>
+      <option value="other">Altro</option>
+    </select>
+    <label class="input-label" style="margin-top:10px">DETTAGLI (opz.)</label>
+    <textarea class="sm" id="report-notes" placeholder="Descrivi il comportamento scorretto..."></textarea>
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-report')">Annulla</button>
+      <button class="btn-sm btn-sm-red"   style="flex:2" onclick="submitReport('${userId}','${username}')">🚩 Segnala</button>
+    </div>`;
+  openModal('modal-report');
+}
+
+async function submitReport(targetId, targetUsername) {
+  const reason = document.getElementById('report-reason')?.value || 'other';
+  const notes  = document.getElementById('report-notes')?.value  || '';
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'SUBMIT_REPORT',
+        payload: {
+          reporter_id:       CUR.id,
+          reporter_username: CUR.username,
+          target_id:         targetId,
+          target_username:   targetUsername,
+          reason,
+          notes,
+          reported_at:       new Date().toISOString()
+        }
+      })
+    });
+    closeModal('modal-report');
+    showToast('🚩 Segnalazione inviata. Grazie!');
+  } catch (e) {
+    showToast('⚠️ Errore nell'invio della segnalazione.');
+  }
+}
+
+/* ── IMPOSTAZIONI PRIVACY ── */
+function openPrivacySettings() {
+  const u = getUser(CUR.id);
+  const p = u?.privacy || {};
+  const content = document.getElementById('privacy-content');
+  if (!content) return;
+
+  const toggle = (key, label) => {
+    const on = p[key] !== false; // default visibile
+    return `<div class="visibility-toggle" style="margin-bottom:10px">
+      <div class="toggle-track ${on ? 'on' : ''}" id="priv-${key}" onclick="togglePrivacy('${key}')">
+        <div class="toggle-knob"></div>
+      </div>
+      <span class="toggle-label">${label}</span>
+    </div>`;
+  };
+
+  content.innerHTML = `
+    <div class="modal-title">🔒 Privacy del profilo</div>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:14px">Scegli cosa mostrano gli altri nel tuo profilo pubblico.</p>
+    ${toggle('show_stats',      '📊 Mostra statistiche')}
+    ${toggle('show_trophies',   '🏆 Mostra trofei')}
+    ${toggle('show_quests',     '⚔️ Mostra quest completate')}
+    ${toggle('show_books',      '📚 Mostra libri completati')}
+    ${toggle('show_streak',     '🔥 Mostra streak')}
+    ${toggle('show_xp',         '⚡ Mostra XP totali')}
+    <button class="btn-sm btn-sm-primary" style="width:100%;margin-top:6px" onclick="savePrivacy()">Salva impostazioni</button>`;
+  openModal('modal-privacy');
+}
+
+function togglePrivacy(key) {
+  const el = document.getElementById('priv-' + key);
+  if (el) el.classList.toggle('on');
+}
+
+function savePrivacy() {
+  const u = getUser(CUR.id);
+  if (!u) return;
+  if (!u.privacy) u.privacy = {};
+  ['show_stats','show_trophies','show_quests','show_books','show_streak','show_xp'].forEach(k => {
+    u.privacy[k] = document.getElementById('priv-' + k)?.classList.contains('on') !== false;
+  });
+  saveDB(); syncCUR(u); syncUserToCloud(u);
+  closeModal('modal-privacy');
+  showToast('🔒 Privacy aggiornata!');
 }
 
 
