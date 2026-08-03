@@ -261,6 +261,24 @@ function showToast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
+/* ── UTILITY STORAGE SICURO ── */
+function saveUserSession(userData) {
+  try {
+    localStorage.setItem('lifequest_user', JSON.stringify(userData));
+  } catch (e) {
+    console.warn("localStorage non disponibile o bloccato dal browser:", e);
+  }
+}
+
+function getUserSession() {
+  try {
+    const data = localStorage.getItem('lifequest_user');
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    console.warn("Impossibile leggere localStorage:", e);
+    return null;
+  }
+}
 
 /* ── 6. AUTENTICAZIONE ── */
 
