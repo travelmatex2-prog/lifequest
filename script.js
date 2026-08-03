@@ -24,7 +24,7 @@
 
 /* ── 1. COSTANTI ── */
 
-const API_URL = "https://script.google.com/macros/s/AKfycbwqqHdZzflYcySt6bpqVyQL-_EfZQHpFAywOz8bqp2aGfCeqFiQ5zoZiGdvzSAlyM32NA/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbyMRayX-tydro9fYgpka-Ne_6H1JJbrI_B60PnthysA3eIuwhxnoRqvse-BWPvaDZIgBw/exec";
 
 const DB_KEY = 'lq_db_v2';
 
@@ -331,17 +331,44 @@ async function doLogin() {
 
   if (!user || !pass) { err.textContent = 'Inserisci username e password'; return; }
 
-  const ph = await hashStr(pass + 'lq_salt_v2');
+  const password_hash = await hashStr(pass + 'lq_salt_v2');
+  err.textContent = 'Accesso al Cloud in corso...';
 
-  let u = DB.users.find(u => u.username.toLowerCase() === user.toLowerCase() && u.password_hash === ph);
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'LOGIN_USER',
+        payload: { username: user, password_hash }
+      })
+    });
 
-  if (!u) {
-    err.textContent = 'Credenziali errate o account non trovato';
-    return;
+    const result = await response.json();
+
+    if (result.success && result.user) {
+      // Salva l'utente nel DB locale e sincronizza la sessione
+      let existing = DB.users.find(u => u.id === result.user.id);
+      if (!existing) {
+        DB.users.push(result.user);
+      } else {
+        Object.assign(existing, result.user);
+      }
+      saveDB();
+      syncCUR(result.user);
+      bootApp();
+    } else {
+      err.textContent = result.message || 'Credenziali errate o account non trovato';
+    }
+  } catch (ex) {
+    // Fallback sul controllo locale se offline
+    let u = DB.users.find(u => u.username.toLowerCase() === user.toLowerCase() && u.password_hash === password_hash);
+    if (u) {
+      syncCUR(u);
+      bootApp();
+    } else {
+      err.textContent = 'Errore di connessione al Cloud e utente non trovato in locale.';
+    }
   }
-
-  syncCUR(u);
-  bootApp();
 }
 
 async function doResetPin() {
