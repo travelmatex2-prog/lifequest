@@ -318,6 +318,7 @@ async function doRegister() {
       };
       DB.users.push(u);
       saveDB();
+      saveUserSession(u); // <--- Uso dello storage sicuro
       syncCUR(u);
       bootApp();
     } else {
@@ -351,6 +352,7 @@ async function doLogin() {
         Object.assign(existing, result.user);
       }
       saveDB();
+      saveUserSession(result.user); // <--- Uso dello storage sicuro
       syncCUR(result.user);
       bootApp();
     } else {
@@ -360,10 +362,10 @@ async function doLogin() {
     // Fallback locale immediato se la rete o Google bloccano la chiamata
     let u = DB.users.find(u => u.username.toLowerCase() === user.toLowerCase());
     if (u) {
+      saveUserSession(u); // <--- Uso dello storage sicuro
       syncCUR(u);
       bootApp();
     } else {
-      // Se l'utente non è ancora in locale, lo creiamo in locale per farti entrare subito
       const newU = {
         id: 'usr_' + Date.now(),
         username: user,
@@ -376,6 +378,7 @@ async function doLogin() {
       };
       DB.users.push(newU);
       saveDB();
+      saveUserSession(newU); // <--- Uso dello storage sicuro
       syncCUR(newU);
       bootApp();
     }
