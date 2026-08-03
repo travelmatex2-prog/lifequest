@@ -10,7 +10,7 @@
      6. Autenticazione
      7. Navigazione
      8. Dashboard
-     9. Quest
+     9. Quest (con Calendario integrato)
     10. Libri
     11. Trofei
     12. Esami / Capitoli / Concetti
@@ -24,11 +24,7 @@
 
 /* ── 1. COSTANTI ── */
 
-
-
-// Configurazione API Google Sheets per LifeQuest
 const API_URL = "https://script.google.com/macros/s/AKfycbwqqHdZzflYcySt6bpqVyQL-_EfZQHpFAywOz8bqp2aGfCeqFiQ5zoZiGdvzSAlyM32NA/exec";
-
 
 const DB_KEY = 'lq_db_v2';
 
@@ -37,13 +33,9 @@ const RANK_TITLES = [
   'Maestro', 'Gran Maestro', 'Leggenda', 'Semidio', 'Dio degli Eroi'
 ];
 
-// XP per pagina libro
 const XP_BOOK_PER_PAGE = 3;
+const BOOK_DIFF_BONUS  = [0, 50, 150, 300, 500, 800];
 
-// Bonus XP al completamento libro, indicizzato per difficoltà (0–5)
-const BOOK_DIFF_BONUS = [0, 50, 150, 300, 500, 800];
-
-// Quale statistica cresce leggendo un certo genere
 const BOOK_GENRE_STAT = {
   saggistica: 'cultura',
   filosofia:  'mente',
@@ -56,10 +48,8 @@ const BOOK_GENRE_STAT = {
   altro:      'cultura'
 };
 
-// Moltiplicatori XP per difficoltà (1–4)
 const DIFF_MULT = [1, 1, 1.15, 1.3, 1.5, 1.7];
 
-// Mappa categoria → statistica
 const CAT_STAT = {
   mente:          'mente',
   corpo:          'corpo',
@@ -71,7 +61,6 @@ const CAT_STAT = {
   mixed:          'mente'
 };
 
-// Colori radar per ciascuna statistica
 const STAT_COLORS = {
   mente:        '#7c6af7',
   corpo:        '#3de89a',
@@ -81,7 +70,6 @@ const STAT_COLORS = {
   sfide:        '#ff5e7a'
 };
 
-// Frasi motivazionali (una al giorno)
 const MOTIVS = [
   'Ogni grande impresa inizia con un primo passo. 🚀',
   'La costanza batte il talento quando il talento non si impegna.',
@@ -95,7 +83,6 @@ const MOTIVS = [
   'Un capitolo al giorno tiene l\'ignoranza lontano. 📖'
 ];
 
-// Definizione attività veloci (sezione Vita)
 const ACTIVITIES = [
   { type: 'gym',      name: 'Palestra',        emoji: '🏋️', stat: 'corpo',        extra: 'workout', xp_base: 120 },
   { type: 'run',      name: 'Corsa',           emoji: '🏃', stat: 'corpo',        extra: null,      xp_base: 80  },
@@ -111,9 +98,6 @@ const ACTIVITIES = [
 
 /* ── 2. DATABASE ── */
 
-/**
- * Struttura dati iniziale (DB vuoto).
- */
 function mkDB() {
   return {
     users:               [],
@@ -142,7 +126,6 @@ function saveDB() {
   localStorage.setItem(DB_KEY, JSON.stringify(DB));
 }
 
-// DB globale e utente corrente
 let DB  = loadDB();
 let CUR = null;
 
@@ -153,21 +136,14 @@ try {
 
 /* ── 3. UTILITÀ ── */
 
-/** Genera un ID univoco (pseudo-UUID breve). */
 function uid() {
   return Math.random().toString(36).substr(2, 9) + Math.random().toString(36).substr(2, 5);
 }
 
-/** Timestamp corrente in ms. */
 function ts() { return Date.now(); }
 
-/** Data odierna come stringa YYYY-MM-DD. */
 function today() { return new Date().toISOString().split('T')[0]; }
 
-/**
- * Hash SHA-256 di una stringa.
- * Usa la Web Crypto API (nativa nei browser moderni).
- */
 async function hashStr(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return Array.from(new Uint8Array(buf))
@@ -175,7 +151,6 @@ async function hashStr(s) {
     .join('');
 }
 
-/** Fingerprint del dispositivo (usata per "legare" la sessione). */
 function deviceFP() {
   try {
     return btoa([
@@ -190,12 +165,10 @@ function deviceFP() {
   }
 }
 
-/** Genera un codice sfida casuale (es. LQ-4829). */
 function randCode() {
   return 'LQ-' + Math.floor(1000 + Math.random() * 9000);
 }
 
-/** Restituisce N stelle (⭐) come stringa. */
 function diffStars(d) {
   return '⭐'.repeat(d);
 }
@@ -203,30 +176,20 @@ function diffStars(d) {
 
 /* ── 4. SISTEMA XP & LIVELLI ── */
 
-/**
- * XP necessari per raggiungere il livello l.
- * Progressione lenta: 500 * l²
- */
 function xpForLevel(l) {
   return Math.round(500 * l * l);
 }
 
-/** Calcola il livello corrente a partire dall'XP totale. */
 function calcLevel(xp) {
   let l = 1;
   while (xpForLevel(l + 1) <= xp) l++;
   return l;
 }
 
-/** Titolo del rango in base al livello. */
 function rankTitle(l) {
   return RANK_TITLES[Math.min(Math.floor((l - 1) / 5), RANK_TITLES.length - 1)];
 }
 
-/**
- * Moltiplicatore XP in base alla streak attiva.
- * Premia la costanza con un bonus fino al +50%.
- */
 function streakMult(u) {
   const d = u.streak_days || 0;
   if (d >= 30) return 1.5;
@@ -236,13 +199,6 @@ function streakMult(u) {
   return 1;
 }
 
-/**
- * Assegna XP all'utente corrente.
- * @param {number} amount   - XP base
- * @param {string} stat     - Statistica da incrementare
- * @param {string} note     - Testo da mostrare nel toast
- * @param {boolean} skipUpdate - Se true non aggiorna la dashboard
- */
 function awardXP(amount, stat, note, skipUpdate) {
   if (!CUR) return 0;
   const u = getUser(CUR.id);
@@ -258,7 +214,6 @@ function awardXP(amount, stat, note, skipUpdate) {
     u.stats[stat] = (u.stats[stat] || 0) + xp;
   }
 
-  // Aggiornamento streak giornaliero
   const td = today();
   if (u.last_active !== td) {
     const yd = new Date(Date.now() - 86400000).toISOString().split('T')[0];
@@ -275,12 +230,10 @@ function awardXP(amount, stat, note, skipUpdate) {
   return xp;
 }
 
-/** Trova un utente per ID nel DB. */
 function getUser(id) {
   return DB.users.find(u => u.id === id);
 }
 
-/** Sincronizza l'utente corrente nel DB e nel localStorage. */
 function syncCUR(u) {
   CUR = u;
   localStorage.setItem('lq_cur_v2', JSON.stringify(u));
@@ -289,9 +242,6 @@ function syncCUR(u) {
 
 /* ── 5. EFFETTI VISIVI ── */
 
-/**
- * Fa apparire un "+NNN XP" flottante nella parte superiore dello schermo.
- */
 function spawnXPFloat(xp) {
   const el = document.createElement('div');
   el.className   = 'xp-float';
@@ -304,7 +254,6 @@ function spawnXPFloat(xp) {
 
 let toastTimer;
 
-/** Mostra un messaggio toast in basso. */
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -314,9 +263,8 @@ function showToast(msg) {
 }
 
 
-/* ── 6. AUTENTICAZIONE CON GOOGLE SHEETS ── */
+/* ── 6. AUTENTICAZIONE ── */
 
-/** Cambia tra tab Login e Registrazione. */
 function switchAuthTab(tab) {
   document.querySelectorAll('.auth-tab').forEach((b, i) =>
     b.classList.toggle('active', i === (tab === 'login' ? 0 : 1))
@@ -326,16 +274,15 @@ function switchAuthTab(tab) {
   document.getElementById('auth-error').textContent = '';
 }
 
-/** Registra un nuovo utente tramite l'API Google Sheets. */
 async function doRegister() {
   const user = document.getElementById('r-user').value.trim();
   const pass = document.getElementById('r-pass').value;
   const pin  = document.getElementById('r-pin').value.trim();
   const err  = document.getElementById('auth-error');
 
-  if (user.length < 3)  { err.textContent = 'Username: min 3 caratteri'; return; }
-  if (pass.length < 6)  { err.textContent = 'Password: min 6 caratteri'; return; }
-  if (!/^\d{4}$/.test(pin)) { err.textContent = 'PIN: esattamente 4 cifre'; return; }
+  if (user.length < 3)       { err.textContent = 'Username: min 3 caratteri'; return; }
+  if (pass.length < 6)       { err.textContent = 'Password: min 6 caratteri'; return; }
+  if (!/^\d{4}$/.test(pin))  { err.textContent = 'PIN: esattamente 4 cifre';  return; }
 
   const password_hash = await hashStr(pass + 'lq_salt_v2');
   const pin_hash      = await hashStr(pin  + 'lq_pin_v2');
@@ -347,11 +294,7 @@ async function doRegister() {
       method: 'POST',
       body: JSON.stringify({
         action: 'REGISTER_USER',
-        payload: {
-          username: user,
-          password_hash: password_hash,
-          pin_hash: pin_hash
-        }
+        payload: { username: user, password_hash, pin_hash }
       })
     });
 
@@ -359,15 +302,18 @@ async function doRegister() {
 
     if (result.success) {
       const u = {
-        id: result.user_id,
-        username: user,
-        password_hash: password_hash,
-        pin_hash: pin_hash,
-        xp_total: 0,
-        level: 1,
-        streak_days: 0,
-        stats: { mente: 0, corpo: 0, cultura: 0, sociale: 0, produttività: 0, sfide: 0 }
+        id:           result.user_id,
+        username:     user,
+        password_hash,
+        pin_hash,
+        xp_total:     0,
+        level:        1,
+        streak_days:  0,
+        last_active:  today(),
+        stats:        { mente: 0, corpo: 0, cultura: 0, sociale: 0, produttività: 0, sfide: 0 }
       };
+      DB.users.push(u);
+      saveDB();
       syncCUR(u);
       bootApp();
     } else {
@@ -378,7 +324,6 @@ async function doRegister() {
   }
 }
 
-/** Login utente verificando i dati (o sincronizzando dal foglio). */
 async function doLogin() {
   const user = document.getElementById('l-user').value.trim();
   const pass = document.getElementById('l-pass').value;
@@ -387,8 +332,7 @@ async function doLogin() {
   if (!user || !pass) { err.textContent = 'Inserisci username e password'; return; }
 
   const ph = await hashStr(pass + 'lq_salt_v2');
-  
-  // Per il login locale immediato o recupero da foglio:
+
   let u = DB.users.find(u => u.username.toLowerCase() === user.toLowerCase() && u.password_hash === ph);
 
   if (!u) {
@@ -400,13 +344,30 @@ async function doLogin() {
   bootApp();
 }
 
+async function doResetPin() {
+  const user    = document.getElementById('pr-user').value.trim();
+  const pin     = document.getElementById('pr-pin').value.trim();
+  const newpass = document.getElementById('pr-newpass').value;
+  const errEl   = document.getElementById('pr-error');
+
+  if (!user || !pin || !newpass) { errEl.textContent = 'Compila tutti i campi'; return; }
+
+  const pinHash  = await hashStr(pin     + 'lq_pin_v2');
+  const passHash = await hashStr(newpass + 'lq_salt_v2');
+
+  const u = DB.users.find(u => u.username.toLowerCase() === user.toLowerCase() && u.pin_hash === pinHash);
+
+  if (!u) { errEl.textContent = 'Username o PIN errati'; return; }
+
+  u.password_hash = passHash;
+  saveDB();
+  closeModal('modal-pin-reset');
+  showToast('✅ Password aggiornata!');
+}
+
 
 /* ── 7. NAVIGAZIONE ── */
 
-/**
- * Naviga al tab specificato.
- * Aggiorna classi attive e chiama la funzione di rendering del tab.
- */
 function gotoTab(tab) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -416,7 +377,6 @@ function gotoTab(tab) {
   window.scrollTo(0, 0);
 }
 
-/** Dispatching del rendering in base al tab corrente. */
 function renderTab(t) {
   const renderers = {
     home:  renderHome,
@@ -432,7 +392,6 @@ function renderTab(t) {
 
 /* ── 8. DASHBOARD ── */
 
-/** Aggiorna l'header XP Hero con i dati aggiornati dell'utente. */
 function updateDashboard() {
   if (!CUR) return;
   const u   = getUser(CUR.id) || CUR;
@@ -457,12 +416,10 @@ function updateDashboard() {
   });
 }
 
-/** Rendering della schermata Home. */
 function renderHome() {
   updateDashboard();
   document.getElementById('motiv-text').textContent = MOTIVS[new Date().getDay() % MOTIVS.length];
 
-  // Prime 3 quest non completate
   const myQ = DB.quests.filter(q => q.user_id === CUR.id && !q.completed).slice(0, 3);
   const ql  = document.getElementById('home-quests-list');
   ql.innerHTML = myQ.length
@@ -479,7 +436,6 @@ function renderHome() {
         </div>`).join('')
     : '<div class="empty" style="padding:16px 0"><div class="empty-emoji">🌟</div><div class="empty-text">Nessuna quest attiva.</div></div>';
 
-  // Log attività recenti
   const acts = DB.activities
     .filter(a => a.user_id === CUR.id)
     .sort((a, b) => b.date - a.date)
@@ -498,21 +454,29 @@ function renderHome() {
 }
 
 
-/* ── 9. QUEST ── */
+/* ── 9. QUEST (con Calendario integrato) ── */
 
 let qTab = 'todo';
+let selectedCalDate = new Date().toISOString().split('T')[0];
 
-/** Cambia il sotto-tab delle Quest. */
+/** Cambia il sotto-tab delle Quest — gestisce anche 'calendar'. */
 function switchQuestTab(t) {
   qTab = t;
   document.querySelectorAll('#screen-quest .tab').forEach((b, i) =>
-    b.classList.toggle('active', ['todo', 'active', 'done'][i] === t)
+    b.classList.toggle('active', ['todo', 'active', 'done', 'calendar'][i] === t)
   );
   renderQuests();
 }
 
-/** Rendering della lista quest in base al tab attivo. */
+/** Rendering della lista quest (o del calendario se tab === 'calendar'). */
 function renderQuests() {
+  const c = document.getElementById('quest-list-container');
+
+  if (qTab === 'calendar') {
+    renderQuestCalendar(c);
+    return;
+  }
+
   const myQ  = DB.quests.filter(q => q.user_id === CUR.id);
   const list = qTab === 'todo'
     ? myQ.filter(q => !q.completed && q.type === 'todo')
@@ -520,7 +484,6 @@ function renderQuests() {
     ? myQ.filter(q => !q.completed && q.type === 'quest')
     : myQ.filter(q => q.completed);
 
-  const c = document.getElementById('quest-list-container');
   c.innerHTML = list.length
     ? list.map(q => `
         <div class="quest-card">
@@ -541,6 +504,122 @@ function renderQuests() {
          <div class="empty-emoji">${qTab === 'done' ? '🏆' : '⚔️'}</div>
          <div class="empty-text">${qTab === 'done' ? 'Nessuna quest completata.' : 'Aggiungi la tua prima quest!'}</div>
        </div>`;
+}
+
+/** Rendering del calendario quest del mese corrente. */
+function renderQuestCalendar(container) {
+  const now = new Date();
+  const y   = now.getFullYear();
+  const m   = now.getMonth();
+  const dim = new Date(y, m + 1, 0).getDate();
+  const fd  = (new Date(y, m, 1).getDay() + 6) % 7;
+
+  const completedQuests = DB.quests.filter(q => q.user_id === CUR.id && q.completed);
+  const questDates = {};
+
+  completedQuests.forEach(q => {
+    const dStr = q.completed_at ? new Date(q.completed_at).toISOString().split('T')[0] : '';
+    if (dStr) questDates[dStr] = (questDates[dStr] || 0) + 1;
+  });
+
+  let html = `
+    <div style="text-align:center;font-size:15px;font-weight:700;margin-bottom:10px">
+      📅 Registro Quest — ${new Date(y, m).toLocaleString('it', { month: 'long', year: 'numeric' })}
+    </div>
+    <div class="cal-grid">`;
+
+  ['Lu','Ma','Me','Gi','Ve','Sa','Do'].forEach(d => html += `<div class="cal-day-label">${d}</div>`);
+  for (let i = 0; i < fd; i++) html += '<div></div>';
+
+  for (let d = 1; d <= dim; d++) {
+    const dayStr  = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const count   = questDates[dayStr] || 0;
+    const isSel   = selectedCalDate === dayStr ? 'today' : '';
+    const hasQuest= count > 0 ? 'has-session' : '';
+
+    html += `
+      <div class="cal-day ${isSel} ${hasQuest}" onclick="selectQuestDate('${dayStr}')">
+        ${d}
+        ${count > 0 ? `<span style="font-size:9px;display:block;color:var(--accent)">• ${count}</span>` : ''}
+      </div>`;
+  }
+  html += '</div>';
+
+  const dayQuests = completedQuests.filter(q => {
+    const dStr = q.completed_at ? new Date(q.completed_at).toISOString().split('T')[0] : '';
+    return dStr === selectedCalDate;
+  });
+
+  html += `
+    <div style="margin-top:16px">
+      <div class="section-hd">
+        <span class="section-title">Quest del ${selectedCalDate} (${dayQuests.length})</span>
+      </div>
+      <div id="cal-quest-list">
+        ${dayQuests.length ? dayQuests.map(q => `
+          <div class="quest-card" style="margin-bottom:8px">
+            <div class="quest-body">
+              <div class="quest-name done">${q.name}</div>
+              <div class="quest-meta">
+                <span class="tag tag-xp">⚡${q.xp_base} XP</span>
+                <span class="tag tag-cat">${q.category}</span>
+              </div>
+              ${q.notes ? `<div style="font-size:11px;color:var(--text3);margin-top:4px">${q.notes}</div>` : ''}
+            </div>
+            <button class="btn-sm btn-sm-ghost" onclick="openEditQuest('${q.id}')">✏️ Edit</button>
+          </div>
+        `).join('') : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessuna quest completata in questa data.</div>'}
+      </div>
+    </div>`;
+
+  container.innerHTML = html;
+}
+
+/** Seleziona una data nel calendario quest. */
+function selectQuestDate(dateStr) {
+  selectedCalDate = dateStr;
+  renderQuestCalendar(document.getElementById('quest-list-container'));
+}
+
+/** Apre la modal per modificare una quest dal calendario. */
+function openEditQuest(id) {
+  const q = DB.quests.find(q => q.id === id);
+  if (!q) return;
+
+  document.getElementById('eq-id').value    = q.id;
+  document.getElementById('eq-name').value  = q.name;
+  document.getElementById('eq-notes').value = q.notes || '';
+  document.getElementById('eq-date').value  = q.completed_at
+    ? new Date(q.completed_at).toISOString().split('T')[0]
+    : today();
+  openModal('modal-edit-quest');
+}
+
+/** Salva le modifiche a una quest dal calendario. */
+function saveEditedQuest() {
+  const id = document.getElementById('eq-id').value;
+  const q  = DB.quests.find(q => q.id === id);
+  if (!q) return;
+
+  q.name  = document.getElementById('eq-name').value.trim();
+  q.notes = document.getElementById('eq-notes').value.trim();
+  const dateInput = document.getElementById('eq-date').value;
+  if (dateInput) q.completed_at = new Date(dateInput).getTime();
+
+  saveDB();
+  closeModal('modal-edit-quest');
+  renderQuests();
+  showToast('✅ Quest aggiornata!');
+}
+
+/** Elimina una quest dal calendario. */
+function deleteQuestFromCal() {
+  const id = document.getElementById('eq-id').value;
+  DB.quests = DB.quests.filter(q => q.id !== id);
+  saveDB();
+  closeModal('modal-edit-quest');
+  renderQuests();
+  showToast('🗑️ Quest eliminata');
 }
 
 /** Aggiunge una nuova quest al DB. */
@@ -576,8 +655,11 @@ function addQuest() {
   showToast('⚔️ Quest aggiunta!');
 }
 
-/** Segna una quest come completata e assegna XP. */
-function toggleQuest(id, e) {
+/**
+ * Segna una quest come completata, assegna XP localmente
+ * e sincronizza con Google Sheets in background.
+ */
+async function toggleQuest(id, e) {
   if (e) e.stopPropagation();
   const q = DB.quests.find(q => q.id === id);
   if (!q || q.completed) return;
@@ -590,12 +672,51 @@ function toggleQuest(id, e) {
   awardXP(q.xp_base, stat, '— ' + q.name);
   checkTrophies();
   renderQuests();
+
+  // Sincronizzazione con Google Sheets in background (non blocca l'UI)
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'COMPLETE_QUEST',
+        payload: {
+          user_id:    CUR.id,
+          name:       q.name,
+          category:   q.category,
+          difficulty: q.difficulty || 1,
+          type:       q.type || 'quest',
+          notes:      q.notes || '',
+          xp_base:    q.xp_base,
+          public:     q.public || false
+        }
+      })
+    });
+  } catch (err) {
+    console.warn('Sync quest fallita (offline?):', err);
+  }
+}
+
+/** Esporta le quest in CSV compatibile con Excel/Google Sheets. */
+function exportToExcelCSV() {
+  let csv = 'ID,User_ID,Nome_Quest,Categoria,XP,Completata,Data_Completamento,Note\n';
+
+  DB.quests.forEach(q => {
+    const cDate = q.completed_at ? new Date(q.completed_at).toISOString().split('T')[0] : '';
+    csv += `"${q.id}","${q.user_id}","${q.name}","${q.category}",${q.xp_base},${q.completed},"${cDate}","${q.notes || ''}"\n`;
+  });
+
+  const link = document.createElement('a');
+  link.href     = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  link.download = 'LifeQuest_Quest.csv';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast('📊 CSV esportato!');
 }
 
 
 /* ── 10. LIBRI ── */
 
-/** Rendering della lista libri. */
 function renderBooks(c) {
   const books = DB.books.filter(b => b.user_id === CUR.id);
   if (!books.length) {
@@ -644,7 +765,6 @@ function renderBooks(c) {
   }).join('');
 }
 
-/** Aggiunge un nuovo libro. */
 function addBook() {
   const title = document.getElementById('bk-title').value.trim();
   if (!title) { showToast('⚠️ Inserisci il titolo'); return; }
@@ -676,20 +796,18 @@ function addBook() {
   showToast('📚 Libro aggiunto!');
 }
 
-/** Apre la modal per loggare sessione di lettura. */
 function openReadingModal(bookId) {
   const b = DB.books.find(b => b.id === bookId);
   if (!b) return;
 
-  document.getElementById('rd-book-id').value          = bookId;
+  document.getElementById('rd-book-id').value           = bookId;
   document.getElementById('reading-modal-title').textContent = '📖 ' + b.title;
-  document.getElementById('rd-pages').value            = '';
-  document.getElementById('rd-current').value          = b.current_page || '';
-  document.getElementById('rd-notes').value            = '';
+  document.getElementById('rd-pages').value             = '';
+  document.getElementById('rd-current').value           = b.current_page || '';
+  document.getElementById('rd-notes').value             = '';
   openModal('modal-log-reading');
 }
 
-/** Salva una sessione di lettura e assegna XP. */
 function logReading() {
   const bookId  = document.getElementById('rd-book-id').value;
   const b       = DB.books.find(b => b.id === bookId);
@@ -730,7 +848,6 @@ function logReading() {
   closeModal('modal-log-reading');
   awardXP(xp, stat, '— Lettura: ' + b.title);
 
-  // Controlla completamento automatico
   if (b.total_pages && b.current_page >= b.total_pages && !b.completed) {
     markBookDone(bookId, true);
   } else {
@@ -738,7 +855,6 @@ function logReading() {
   }
 }
 
-/** Segna un libro come completato e assegna il bonus XP. */
 function markBookDone(bookId, silent) {
   const b = DB.books.find(b => b.id === bookId);
   if (!b || b.completed) return;
@@ -775,7 +891,6 @@ const TROPHY_DEFS = [
   { id: 'gym_10',      name: '10 sessioni palestra', emoji: '💪', check: () => DB.activities.filter(a => a.user_id === CUR.id && a.type === 'gym').length >= 10 }
 ];
 
-/** Controlla e sblocca trofei non ancora ottenuti. */
 function checkTrophies() {
   const u = getUser(CUR.id);
   if (!u) return;
@@ -798,7 +913,6 @@ function checkTrophies() {
 
 let studyTab = 'exams';
 
-/** Cambia il sotto-tab Studio. */
 function switchStudyTab(t) {
   studyTab = t;
   document.querySelectorAll('#screen-study .tab').forEach((b, i) =>
@@ -807,7 +921,6 @@ function switchStudyTab(t) {
   renderStudy();
 }
 
-/** Dispatcher rendering Studio. */
 function renderStudy() {
   const c = document.getElementById('study-container');
   if      (studyTab === 'exams')    renderExams(c);
@@ -816,10 +929,6 @@ function renderStudy() {
   else                               renderCalendar(c);
 }
 
-/**
- * Calcola la percentuale di mastery di un esame
- * come media pesata (40% capitoli, 60% concetti).
- */
 function masteryPct(examId) {
   const chs = DB.chapters.filter(c => c.exam_id === examId);
   if (!chs.length) return 0;
@@ -832,7 +941,6 @@ function masteryPct(examId) {
   return Math.round((chP * 0.4 + coP * 0.6) * 100);
 }
 
-/** Rendering lista esami. */
 function renderExams(c) {
   const exams = DB.exams.filter(e => e.user_id === CUR.id);
   if (!exams.length) {
@@ -841,9 +949,9 @@ function renderExams(c) {
   }
 
   c.innerHTML = exams.map(exam => {
-    const chs  = DB.chapters.filter(ch => ch.exam_id === exam.id);
-    const mp   = masteryPct(exam.id);
-    const dl   = exam.exam_date ? Math.ceil((new Date(exam.exam_date) - new Date()) / 86400000) : null;
+    const chs   = DB.chapters.filter(ch => ch.exam_id === exam.id);
+    const mp    = masteryPct(exam.id);
+    const dl    = exam.exam_date ? Math.ceil((new Date(exam.exam_date) - new Date()) / 86400000) : null;
     const dlStr = dl !== null ? (dl > 0 ? dl + 'gg' : dl === 0 ? 'Oggi!' : 'Passato') : '';
     const mpColor = mp > 75 ? 'var(--green)' : mp > 40 ? 'var(--accent2)' : 'var(--red)';
 
@@ -877,7 +985,6 @@ function renderExams(c) {
   }).join('');
 }
 
-/** Rendering di una riga capitolo (con sotto-concetti). */
 function renderChRow(ch) {
   const cos  = DB.concepts.filter(c => c.chapter_id === ch.id);
   const done = cos.filter(c => c.completed).length;
@@ -903,18 +1010,15 @@ function renderChRow(ch) {
   </div>`;
 }
 
-/** Toggle visibilità corpo esame. */
 function toggleExamBody(id) {
   document.getElementById('exam-body-' + id)?.classList.toggle('open');
 }
 
-/** Toggle visibilità lista concetti di un capitolo. */
 function toggleConcepts(id) {
   const el = document.getElementById('concepts-' + id);
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-/** Aggiunge un esame. */
 function addExam() {
   const title = document.getElementById('ex-name').value.trim();
   if (!title) { showToast('⚠️ Nome materia richiesto'); return; }
@@ -936,14 +1040,12 @@ function addExam() {
   showToast('📘 Esame aggiunto!');
 }
 
-/** Apre la modal per aggiungere un capitolo a un esame. */
 function openAddChapter(examId) {
   document.getElementById('ch-exam-id').value = examId;
   document.getElementById('ch-name').value    = '';
   openModal('modal-add-chapter');
 }
 
-/** Aggiunge un capitolo. */
 function addChapter() {
   const name = document.getElementById('ch-name').value.trim();
   if (!name) { showToast('⚠️ Nome capitolo richiesto'); return; }
@@ -963,7 +1065,6 @@ function addChapter() {
   showToast('📚 Capitolo aggiunto!');
 }
 
-/** Segna un capitolo come completato. */
 function toggleChapter(id) {
   const ch = DB.chapters.find(c => c.id === id);
   if (!ch || ch.completed) return;
@@ -977,7 +1078,6 @@ function toggleChapter(id) {
   renderStudy();
 }
 
-/** Apre la modal per aggiungere un concetto a un capitolo. */
 function openAddConcept(chId) {
   document.getElementById('co-chapter-id').value = chId;
   document.getElementById('co-name').value       = '';
@@ -985,7 +1085,6 @@ function openAddConcept(chId) {
   openModal('modal-add-concept');
 }
 
-/** Aggiunge un concetto. */
 function addConcept() {
   const name = document.getElementById('co-name').value.trim();
   if (!name) { showToast('⚠️ Nome concetto richiesto'); return; }
@@ -1005,7 +1104,6 @@ function addConcept() {
   showToast('🔵 Concetto aggiunto!');
 }
 
-/** Segna un concetto come appreso. */
 function toggleConcept(id) {
   const co = DB.concepts.find(c => c.id === id);
   if (!co || co.completed) return;
@@ -1018,7 +1116,6 @@ function toggleConcept(id) {
   renderStudy();
 }
 
-/** Apre la modal per loggare una sessione di studio. */
 function openLogSession(examId) {
   document.getElementById('ss-exam-id').value = examId;
   document.getElementById('ss-mins').value    = '';
@@ -1026,7 +1123,6 @@ function openLogSession(examId) {
   openModal('modal-log-session');
 }
 
-/** Salva una sessione di studio. */
 function logSession() {
   const mins = parseInt(document.getElementById('ss-mins').value);
   if (!mins || mins < 1) { showToast('⚠️ Inserisci i minuti'); return; }
@@ -1066,7 +1162,6 @@ function logSession() {
   renderStudy();
 }
 
-/** Rendering lista sessioni studio. */
 function renderSessions(c) {
   const sss = DB.sessions
     .filter(s => s.user_id === CUR.id)
@@ -1087,12 +1182,11 @@ function renderSessions(c) {
   ) + '</div>';
 }
 
-/** Rendering del calendario con dot per sessioni studio e lettura. */
 function renderCalendar(c) {
   const now = new Date();
   const y   = now.getFullYear();
   const m   = now.getMonth();
-  const fd  = (new Date(y, m, 1).getDay() + 6) % 7; // Lun = 0
+  const fd  = (new Date(y, m, 1).getDay() + 6) % 7;
   const dim = new Date(y, m + 1, 0).getDate();
   const MN  = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
                 'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
@@ -1123,7 +1217,7 @@ function renderCalendar(c) {
     const isT = d === now.getDate();
     const k   = y + '-' + (m + 1) + '-' + d;
     const cls = [
-      isT          ? 'today'       : '',
+      isT           ? 'today'       : '',
       sDates.has(k) ? 'has-session' : '',
       bDates.has(k) ? 'has-book'   : ''
     ].filter(Boolean).join(' ');
@@ -1138,7 +1232,6 @@ function renderCalendar(c) {
 
 /* ── 13. VITA / ATTIVITÀ ── */
 
-/** Rendering della griglia attività e del log recente. */
 function renderLife() {
   const ag = document.getElementById('activity-grid');
   ag.innerHTML = ACTIVITIES.map(a => `
@@ -1165,7 +1258,6 @@ function renderLife() {
     || '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessuna attività registrata.</div>';
 }
 
-/** Apre la modal per loggare un'attività vita. */
 function openActivityModal(type) {
   const act = ACTIVITIES.find(a => a.type === type);
   if (!act) return;
@@ -1208,7 +1300,6 @@ function openActivityModal(type) {
   openModal('modal-log-activity');
 }
 
-/** Salva un'attività vita e assegna XP. */
 function logActivity() {
   const type  = document.getElementById('act-type').value;
   let   stat  = document.getElementById('act-stat').value;
@@ -1236,21 +1327,30 @@ function logActivity() {
     name = '⭐ ' + customName + ` (${mins}min)`;
   }
 
-  DB.activities.push({ id: uid(), user_id: CUR.id, name, date: ts(), xp, stat, type, notes });
+  const actRecord = { id: uid(), user_id: CUR.id, name, date: ts(), xp, stat, type, notes };
+  DB.activities.push(actRecord);
   saveDB();
   closeModal('modal-log-activity');
   awardXP(xp, stat, '— ' + name);
   checkTrophies();
   renderLife();
+
+  // Sync con Google Sheets in background
+  fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'LOG_ACTIVITY',
+      payload: { user_id: CUR.id, type, stat, xp, notes, name }
+    })
+  }).catch(err => console.warn('Sync attività fallita:', err));
 }
 
 
 /* ── 14. SFIDE PVP ── */
 
-let pvpTab      = 'active';
+let pvpTab       = 'active';
 let pendingRules = [];
 
-/** Cambia il sotto-tab Sfide. */
 function switchPvpTab(t) {
   pvpTab = t;
   document.querySelectorAll('#screen-pvp .tab').forEach((b, i) =>
@@ -1259,7 +1359,6 @@ function switchPvpTab(t) {
   renderPvP();
 }
 
-/** Rendering lista sfide. */
 function renderPvP() {
   const myC  = DB.challenges.filter(c => c.creator_id === CUR.id || c.joiner_id === CUR.id);
   const list = pvpTab === 'active'  ? myC.filter(c => c.status === 'active')
@@ -1275,7 +1374,6 @@ function renderPvP() {
        </div>`;
 }
 
-/** HTML per una card sfida. */
 function renderChallengeCard(ch) {
   const isCreator = ch.creator_id === CUR.id;
   const iWon      = ch.winner_id  === CUR.id;
@@ -1313,7 +1411,6 @@ function renderChallengeCard(ch) {
   </div>`;
 }
 
-/** Apre la modal di dettaglio sfida. */
 function viewChallenge(id) {
   const ch = DB.challenges.find(c => c.id === id);
   if (!ch) return;
@@ -1358,7 +1455,6 @@ function viewChallenge(id) {
 
 /* --- Rule Builder --- */
 
-/** Apre la modal per aggiungere una regola. */
 function addRule(type) {
   pendingRules = pendingRules || [];
   document.getElementById('rule-type').value = type;
@@ -1372,26 +1468,25 @@ function addRule(type) {
   document.getElementById('rule-modal-title').textContent = titles[type] || 'Aggiungi Regola';
 
   const fields = {
-    metrica:   `<label class="input-label">COSA SI MISURA</label>
+    metrica:    `<label class="input-label">COSA SI MISURA</label>
       <input class="sm sm-mb" id="rf-what"   placeholder="es. pagine lette, ore in palestra, km corsi">
       <label class="input-label">OBIETTIVO (chi vince)</label>
       <input class="sm sm-mb" id="rf-target" placeholder="es. Chi arriva a 200 pagine">`,
-    durata:    `<label class="input-label">DURATA SFIDA</label>
+    durata:     `<label class="input-label">DURATA SFIDA</label>
       <input class="sm sm-mb" id="rf-duration" placeholder="es. 7 giorni, 2 settimane">
       <label class="input-label">DATA INIZIO</label>
       <input class="sm sm-mb" id="rf-start" type="date">
       <label class="input-label">DATA FINE</label>
       <input class="sm sm-mb" id="rf-end"   type="date">`,
-    condizione:`<label class="input-label">REGOLA / CONDIZIONE</label>
+    condizione: `<label class="input-label">REGOLA / CONDIZIONE</label>
       <textarea class="sm sm-mb" id="rf-cond" placeholder="es. Ogni giorno almeno 30 min..."></textarea>`,
-    penalita:  `<label class="input-label">PENALITÀ IN CASO DI PERDITA</label>
+    penalita:   `<label class="input-label">PENALITÀ IN CASO DI PERDITA</label>
       <input class="sm sm-mb" id="rf-pen" placeholder="es. -50 XP extra, il perdente paga il pranzo">`
   };
   document.getElementById('rule-fields').innerHTML = fields[type] || '';
   openModal('modal-add-rule');
 }
 
-/** Salva la regola pendente. */
 function saveRule() {
   const type = document.getElementById('rule-type').value;
   let value  = '';
@@ -1419,7 +1514,6 @@ function saveRule() {
   closeModal('modal-add-rule');
 }
 
-/** Aggiorna la lista delle regole pendenti nella modal crea-sfida. */
 function renderPendingRules() {
   const list = document.getElementById('pvp-rules-list');
   if (!list) return;
@@ -1431,13 +1525,11 @@ function renderPendingRules() {
     </div>`).join('');
 }
 
-/** Rimuove una regola dalla lista pendente. */
 function removeRule(i) {
   pendingRules.splice(i, 1);
   renderPendingRules();
 }
 
-/** Crea la sfida e genera il codice. */
 function createChallenge() {
   const title = document.getElementById('pvp-title').value.trim();
   if (!title) { showToast('⚠️ Inserisci il titolo della sfida'); return; }
@@ -1474,21 +1566,19 @@ function createChallenge() {
   showToast('⚔️ Sfida creata! Codice: ' + code);
   renderPvP();
 
-  // Reset form
   ['pvp-title', 'pvp-desc', 'pvp-stake', 'pvp-deadline'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
 }
 
-/** Unisce l'utente corrente a una sfida tramite codice. */
 function joinChallenge() {
   const code = document.getElementById('join-code-input').value.trim().toUpperCase();
   const ch   = DB.challenges.find(c => c.code === code);
 
-  if (!ch)                      { showToast('⚠️ Codice non trovato');           return; }
+  if (!ch)                      { showToast('⚠️ Codice non trovato');              return; }
   if (ch.creator_id === CUR.id) { showToast('⚠️ Non puoi unirti alla tua sfida'); return; }
-  if (ch.joiner_id)             { showToast('⚠️ Sfida già occupata');             return; }
+  if (ch.joiner_id)             { showToast('⚠️ Sfida già occupata');              return; }
 
   ch.joiner_id       = CUR.id;
   ch.joiner_username = CUR.username;
@@ -1500,13 +1590,11 @@ function joinChallenge() {
   renderPvP();
 }
 
-/** Apre la modal per dichiarare il vincitore. */
 function openDeclareWinner(id) {
   document.getElementById('win-challenge-id').value = id;
   openModal('modal-declare-winner');
 }
 
-/** Assegna XP al vincitore e chiude la sfida. */
 function declareWinner(who) {
   const id = document.getElementById('win-challenge-id').value;
   const ch = DB.challenges.find(c => c.id === id);
@@ -1531,7 +1619,6 @@ function declareWinner(who) {
   renderPvP();
 }
 
-/** Crea una copia di una sfida esistente. */
 function replicateChallenge(id) {
   const orig = DB.challenges.find(c => c.id === id);
   if (!orig) return;
@@ -1539,15 +1626,15 @@ function replicateChallenge(id) {
   const code = randCode();
   const ch   = {
     ...orig,
-    id:              uid(),
-    creator_id:      CUR.id,
-    creator_username:CUR.username,
-    joiner_id:       null,
-    joiner_username: null,
+    id:               uid(),
+    creator_id:       CUR.id,
+    creator_username: CUR.username,
+    joiner_id:        null,
+    joiner_username:  null,
     code,
-    status:          'pending',
-    created_at:      ts(),
-    winner_id:       null
+    status:           'pending',
+    created_at:       ts(),
+    winner_id:        null
   };
 
   DB.challenges.push(ch);
@@ -1562,7 +1649,6 @@ function replicateChallenge(id) {
 
 let statsTab = 'stats';
 
-/** Cambia il sotto-tab Statistiche. */
 function switchStatsTab(t) {
   statsTab = t;
   document.querySelectorAll('#screen-stats .tab').forEach((b, i) =>
@@ -1575,7 +1661,6 @@ function renderStats() {
   statsTab === 'stats' ? renderMyStats() : renderLeaderboard();
 }
 
-/** Rendering statistiche personali con grafico radar. */
 function renderMyStats() {
   const u       = getUser(CUR.id) || CUR;
   const stats   = u.stats || {};
@@ -1627,7 +1712,8 @@ function renderMyStats() {
       <span class="toggle-label" style="font-size:12px">Profilo pubblico in leaderboard</span>
     </div>
     <div style="display:flex;gap:8px;margin:10px 0 20px">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="exportData()">📤 Esporta</button>
+      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="exportData()">📤 Esporta JSON</button>
+      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="exportToExcelCSV()">📊 Esporta CSV</button>
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="document.getElementById('import-file').click()">📥 Importa</button>
       <input type="file" id="import-file" style="display:none" accept=".json" onchange="importData(this)">
     </div>
@@ -1637,7 +1723,6 @@ function renderMyStats() {
   setTimeout(() => drawRadar(stats, maxVal), 50);
 }
 
-/** Toggle visibilità profilo pubblico. */
 function toggleProfileVis() {
   const u = getUser(CUR.id);
   if (!u) return;
@@ -1648,9 +1733,6 @@ function toggleProfileVis() {
   showToast(u.public_profile ? '🌐 Profilo pubblico' : '🔒 Profilo privato');
 }
 
-/**
- * Disegna il grafico radar delle statistiche su canvas.
- */
 function drawRadar(stats, maxVal) {
   const canvas = document.getElementById('stats-canvas');
   if (!canvas) return;
@@ -1662,7 +1744,6 @@ function drawRadar(stats, maxVal) {
 
   ctx.clearRect(0, 0, W, H);
 
-  // Griglia di sfondo
   for (let g = 1; g <= 4; g++) {
     ctx.beginPath();
     for (let i = 0; i < n; i++) {
@@ -1677,7 +1758,6 @@ function drawRadar(stats, maxVal) {
     ctx.stroke();
   }
 
-  // Assi e etichette
   for (let i = 0; i < n; i++) {
     const a  = (Math.PI * 2 * i / n) - Math.PI / 2;
     ctx.beginPath();
@@ -1688,14 +1768,13 @@ function drawRadar(stats, maxVal) {
 
     const lx = cx + Math.cos(a) * (r + 18);
     const ly = cy + Math.sin(a) * (r + 18);
-    ctx.fillStyle   = '#8080a0';
-    ctx.font        = '10px -apple-system,sans-serif';
-    ctx.textAlign   = 'center';
-    ctx.textBaseline= 'middle';
+    ctx.fillStyle    = '#8080a0';
+    ctx.font         = '10px -apple-system,sans-serif';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillText(keys[i], lx, ly);
   }
 
-  // Area dati
   ctx.beginPath();
   for (let i = 0; i < n; i++) {
     const v = Math.min(1, (stats[keys[i]] || 0) / maxVal);
@@ -1711,7 +1790,6 @@ function drawRadar(stats, maxVal) {
   ctx.lineWidth   = 2;
   ctx.stroke();
 
-  // Punti colorati
   for (let i = 0; i < n; i++) {
     const v = Math.min(1, (stats[keys[i]] || 0) / maxVal);
     const a = (Math.PI * 2 * i / n) - Math.PI / 2;
@@ -1722,7 +1800,6 @@ function drawRadar(stats, maxVal) {
   }
 }
 
-/** Rendering leaderboard pubblica. */
 function renderLeaderboard() {
   const users = DB.users
     .filter(u => u.public_profile !== false)
@@ -1753,7 +1830,6 @@ function renderLeaderboard() {
     }).join('') + '</div>';
 }
 
-/** Mostra il profilo pubblico di un utente in una modal. */
 function viewProfile(userId) {
   const u = DB.users.find(u => u.id === userId);
   if (!u) return;
@@ -1846,7 +1922,6 @@ function viewProfile(userId) {
 
 /* ── 16. EXPORT / IMPORT ── */
 
-/** Esporta i dati dell'utente come file JSON. */
 function exportData() {
   const data = {
     exported_at:   new Date().toISOString(),
@@ -1863,14 +1938,13 @@ function exportData() {
     challenges:    DB.challenges.filter(c => c.creator_id === CUR.id || c.joiner_id === CUR.id)
   };
 
-  const a     = document.createElement('a');
-  a.href      = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-  a.download  = 'lifequest_v2_' + today() + '.json';
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  a.download = 'lifequest_v2_' + today() + '.json';
   a.click();
   showToast('📤 Backup esportato!');
 }
 
-/** Importa i dati da un file JSON precedentemente esportato. */
 function importData(input) {
   const file = input.files[0];
   if (!file) return;
@@ -1916,12 +1990,10 @@ function importData(input) {
 
 /* ── 17. MODALI ── */
 
-/** Apre una modal. */
 function openModal(id) {
   document.getElementById(id)?.classList.add('open');
 }
 
-/** Chiude una modal. */
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
 }
@@ -1929,10 +2001,6 @@ function closeModal(id) {
 
 /* ── 18. AVVIO ── */
 
-/**
- * Avvia l'applicazione dopo il login/registrazione.
- * Nasconde la schermata auth e mostra l'app.
- */
 function bootApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display         = 'flex';
@@ -1943,7 +2011,6 @@ function bootApp() {
 
   document.getElementById('motiv-text').textContent = MOTIVS[new Date().getDay() % MOTIVS.length];
 
-  // Reset stato UI
   pendingRules = [];
   renderPendingRules();
 }
@@ -1954,203 +2021,4 @@ window.addEventListener('load', () => {
     const u = getUser(CUR.id);
     if (u) { syncCUR(u); bootApp(); }
   }
-  
-  /* ── NUOVE FUNZIONALITÀ CALENDARIO & ESPORTAZIONE ── */
-
-let selectedCalDate = new Date().toISOString().split('T')[0];
-
-function switchQuestTab(t) {
-  qTab = t;
-  document.querySelectorAll('#screen-quest .tab').forEach((b, i) =>
-    b.classList.toggle('active', ['todo', 'active', 'done', 'calendar'][i] === t)
-  );
-  renderQuests();
-}
-
-// Estensione di renderQuests per gestire il calendario
-const originalRenderQuests = renderQuests;
-renderQuests = function() {
-  if (typeof qTab !== 'undefined' && qTab === 'calendar') {
-    renderQuestCalendar(document.getElementById('quest-list-container'));
-  } else {
-    originalRenderQuests();
-  }
-};
-
-function renderQuestCalendar(container) {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const dim = new Date(y, m + 1, 0).getDate();
-  const fd = (new Date(y, m, 1).getDay() + 6) % 7;
-
-  const completedQuests = DB.quests.filter(q => q.user_id === CUR.id && q.completed);
-  const questDates = {};
-
-  completedQuests.forEach(q => {
-    const dStr = q.completed_at ? new Date(q.completed_at).toISOString().split('T')[0] : '';
-    if (dStr) {
-      questDates[dStr] = (questDates[dStr] || 0) + 1;
-    }
-  });
-
-  let html = `
-    <div style="text-align:center;font-size:15px;font-weight:700;margin-bottom:10px">
-      📅 Registro Quest — ${new Date(y, m).toLocaleString('it', { month: 'long', year: 'numeric' })}
-    </div>
-    <div class="cal-grid">`;
-
-  ['Lu','Ma','Me','Gi','Ve','Sa','Do'].forEach(d => html += `<div class="cal-day-label">${d}</div>`);
-  for (let i = 0; i < fd; i++) html += '<div></div>';
-
-  for (let d = 1; d <= dim; d++) {
-    const dayStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const count = questDates[dayStr] || 0;
-    const isSel = selectedCalDate === dayStr ? 'today' : '';
-    const hasQuest = count > 0 ? 'has-session' : '';
-
-    html += `
-      <div class="cal-day ${isSel} ${hasQuest}" onclick="selectQuestDate('${dayStr}')">
-        ${d}
-        ${count > 0 ? `<span style="font-size:9px;display:block;color:var(--accent)">• ${count}</span>` : ''}
-      </div>`;
-  }
-  html += '</div>';
-
-  const dayQuests = completedQuests.filter(q => {
-    const dStr = q.completed_at ? new Date(q.completed_at).toISOString().split('T')[0] : '';
-    return dStr === selectedCalDate;
-  });
-
-  html += `
-    <div style="margin-top:16px">
-      <div class="section-hd">
-        <span class="section-title">Quest del ${selectedCalDate} (${dayQuests.length})</span>
-      </div>
-      <div id="cal-quest-list">
-        ${dayQuests.length ? dayQuests.map(q => `
-          <div class="quest-card" style="margin-bottom:8px">
-            <div class="quest-body">
-              <div class="quest-name done">${q.name}</div>
-              <div class="quest-meta">
-                <span class="tag tag-xp">⚡${q.xp_base} XP</span>
-                <span class="tag tag-cat">${q.category}</span>
-              </div>
-              ${q.notes ? `<div style="font-size:11px;color:var(--text3);margin-top:4px">${q.notes}</div>` : ''}
-            </div>
-            <button class="btn-sm btn-sm-ghost" onclick="openEditQuest('${q.id}')">✏️ Edit</button>
-          </div>
-        `).join('') : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessuna quest completata in questa data.</div>'}
-      </div>
-    </div>`;
-
-  container.innerHTML = html;
-}
-
-function selectQuestDate(dateStr) {
-  selectedCalDate = dateStr;
-  renderQuestCalendar(document.getElementById('quest-list-container'));
-}
-
-function openEditQuest(id) {
-  const q = DB.quests.find(q => q.id === id);
-  if (!q) return;
-
-  document.getElementById('eq-id').value = q.id;
-  document.getElementById('eq-name').value = q.name;
-  document.getElementById('eq-notes').value = q.notes || '';
-  document.getElementById('eq-date').value = q.completed_at ? new Date(q.completed_at).toISOString().split('T')[0] : today();
-  openModal('modal-edit-quest');
-}
-
-function saveEditedQuest() {
-  const id = document.getElementById('eq-id').value;
-  const q = DB.quests.find(q => q.id === id);
-  if (!q) return;
-
-  q.name = document.getElementById('eq-name').value.trim();
-  q.notes = document.getElementById('eq-notes').value.trim();
-  const dateInput = document.getElementById('eq-date').value;
-  if (dateInput) {
-    q.completed_at = new Date(dateInput).getTime();
-  }
-
-  saveDB();
-  closeModal('modal-edit-quest');
-  renderQuests();
-  if (typeof showToast === 'function') showToast('✅ Quest aggiornata!');
-}
-
-function deleteQuestFromCal() {
-  const id = document.getElementById('eq-id').value;
-  DB.quests = DB.quests.filter(q => q.id !== id);
-  saveDB();
-  closeModal('modal-edit-quest');
-  renderQuests();
-  if (typeof showToast === 'function') showToast('🗑️ Quest eliminata');
-}
-
-// Funzione per scaricare i dati in formato CSV/Excel
-function exportToExcelCSV() {
-  let csvContent = "data:text/csv;charset=utf-8,";
-  csvContent += "ID,User_ID,Nome_Quest,Categoria,XP,Completata,Data_Completamento,Note\n";
-  
-  DB.quests.forEach(q => {
-    const cDate = q.completed_at ? new Date(q.completed_at).toISOString().split('T')[0] : '';
-    csvContent += `"${q.id}","${q.user_id}","${q.name}","${q.category}",${q.xp_base},${q.completed},"${cDate}","${q.notes || ''}"\n`;
-  });
-
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute("download", `LifeQuest_Database.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
-  
-
-async function toggleQuest(id, e) {
-  if (e) e.stopPropagation();
-  const q = DB.quests.find(q => q.id === id);
-  if (!q || q.completed) return;
-
-  q.completed    = true;
-  q.completed_at = ts();
-  saveDB();
-
-  const stat = CAT_STAT[q.category] || 'produttività';
-  awardXP(q.xp_base, stat, '— ' + q.name);
-  checkTrophies();
-  renderQuests();
-
-  // Sincronizzazione con Google Sheets / Excel in background
-  try {
-    await fetch(API_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'COMPLETE_QUEST',
-        payload: {
-          user_id: CUR.id,
-          name: q.name,
-          category: q.category,
-          difficulty: q.difficulty || 1,
-          type: q.type || 'quest',
-          notes: q.notes || '',
-          xp_base: q.xp_base,
-          public: q.public || false
-        }
-      })
-    });
-  } catch (err) {
-    console.error("Errore di sincronizzazione con il foglio:", err);
-  }
-}
-
-
-  
 });
-
-
-
-
