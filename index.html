@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -59,7 +58,7 @@
     </div>
   </div>
   <div class="section" style="padding-top:12px">
-    <div class="motiv-card" id="motiv-card">
+    <div class="motiv-card">
       <div class="motiv-text" id="motiv-text">Ogni grande impresa inizia con un primo passo.</div>
       <div class="motiv-badge">🌟 Messaggio del giorno</div>
     </div>
@@ -75,41 +74,19 @@
   </div>
 </div>
 
-<!-- SCHERMATA QUEST CON CALENDARIO -->
+<!-- QUEST -->
 <div id="screen-quest" class="screen">
   <div class="screen-header">
     <div class="screen-title">⚔️ <span>Quest</span></div>
     <button class="btn-sm btn-sm-primary" onclick="openModal('modal-add-quest')">+ Quest</button>
   </div>
-  
-  <!-- Tab di navigazione (incluso Calendario) -->
   <div class="tabs">
     <button class="tab active" onclick="switchQuestTab('todo')">To-Do</button>
     <button class="tab" onclick="switchQuestTab('active')">Obiettivi</button>
     <button class="tab" onclick="switchQuestTab('done')">✅ Fatte</button>
-    <button class="tab" onclick="switchQuestTab('calendar')">📅 Calendario</button>
+    <button class="tab" onclick="switchQuestTab('calendar')">📅 Cal.</button>
   </div>
-  
   <div style="padding:0 20px 20px" id="quest-list-container"></div>
-</div>
-
-<!-- MODAL PER EDITARE LE QUEST DAL CALENDARIO -->
-<div class="modal-overlay" id="modal-edit-quest" onclick="if(event.target===this)closeModal('modal-edit-quest')">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-title">✏️ Modifica Quest Completata</div>
-    <input type="hidden" id="eq-id">
-    <label class="input-label">NOME QUEST</label>
-    <input class="sm" id="eq-name">
-    <label class="input-label">DATA COMPLETAMENTO</label>
-    <input class="sm" id="eq-date" type="date">
-    <label class="input-label">NOTE</label>
-    <textarea class="sm" id="eq-notes"></textarea>
-    <div class="btn-row" style="margin-top: 15px; display: flex; gap: 10px;">
-      <button class="btn-sm btn-sm-red" style="flex:1" onclick="deleteQuestFromCal()">Elimina</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="saveEditedQuest()">Salva Modifiche</button>
-    </div>
-  </div>
 </div>
 
 <!-- STUDIO -->
@@ -175,10 +152,10 @@
     <button class="tab" onclick="switchStatsTab('leaderboard')">Leaderboard</button>
   </div>
   <div style="padding:14px 20px 0;display:flex;gap:8px">
-  <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="openModal('modal-search-users');renderFriendsList()">👥 Cerca & Amici</button>
-  <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="openPrivacySettings()">🔒 Privacy</button>
-</div>
-<div id="stats-container"></div>
+    <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="openModal('modal-search-users');renderFriendsList()">👥 Cerca &amp; Amici</button>
+    <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="openPrivacySettings()">🔒 Privacy</button>
+  </div>
+  <div id="stats-container"></div>
 </div>
 
 </div><!-- /main-content -->
@@ -214,31 +191,50 @@
     <div class="modal-handle"></div>
     <div class="modal-title">Nuova Quest / To-Do</div>
     <label class="input-label">NOME</label>
-    <input class="sm" id="q-name" placeholder="es. Studiare Capitolo 3">
+    <input class="sm" id="q-name" placeholder="es. Studiare Capitolo 3" style="margin-bottom:10px">
     <label class="input-label">CATEGORIA</label>
-    <select class="sm" id="q-cat">
-      <option value="mente">🧠 Mente</option><option value="corpo">💪 Corpo</option>
-      <option value="cultura">📚 Cultura</option><option value="sociale">🤝 Sociale</option>
-      <option value="produttività">✅ Produttività</option><option value="altro">⭐ Altro</option>
+    <select class="sm" id="q-cat" style="margin-bottom:10px">
+      <option value="mente">🧠 Mente</option>
+      <option value="corpo">💪 Corpo</option>
+      <option value="cultura">📚 Cultura</option>
+      <option value="sociale">🤝 Sociale</option>
+      <option value="produttività">✅ Produttività</option>
+      <option value="altro">⭐ Altro</option>
     </select>
     <label class="input-label">DIFFICOLTÀ</label>
-    <select class="sm" id="q-diff">
-      <option value="1">⭐ Facile (base ×1.0)</option><option value="2" selected>⭐⭐ Normale (×1.15)</option>
-      <option value="3">⭐⭐⭐ Difficile (×1.3)</option><option value="4">⭐⭐⭐⭐ Molto difficile (×1.5)</option>
+    <select class="sm" id="q-diff" style="margin-bottom:10px">
+      <option value="1">⭐ Facile (×1.0)</option>
+      <option value="2" selected>⭐⭐ Normale (×1.15)</option>
+      <option value="3">⭐⭐⭐ Difficile (×1.3)</option>
+      <option value="4">⭐⭐⭐⭐ Molto difficile (×1.5)</option>
     </select>
     <label class="input-label">TIPO</label>
-    <select class="sm" id="q-type">
-      <option value="todo">✅ To-Do (azione singola)</option><option value="quest">⚔️ Obiettivo (multi-step)</option>
+    <select class="sm" id="q-type" style="margin-bottom:10px">
+      <option value="todo">✅ To-Do (azione singola)</option>
+      <option value="quest">⚔️ Obiettivo (multi-step)</option>
     </select>
-    <div class="visibility-toggle">
-      <div class="toggle-track" id="q-vis-toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
-      <span class="toggle-label">Visibile nel mio profilo pubblico</span>
-    </div>
     <label class="input-label">NOTE (opz.)</label>
-    <textarea class="sm" id="q-notes" placeholder="Dettagli..."></textarea>
+    <textarea class="sm" id="q-notes" placeholder="Dettagli..." style="margin-bottom:10px"></textarea>
     <div class="btn-row">
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-add-quest')">Annulla</button>
       <button class="btn-sm btn-sm-primary" style="flex:2" onclick="addQuest()">Aggiungi quest</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOG ACTIVITY -->
+<div class="modal-overlay" id="modal-log-activity" onclick="if(event.target===this)closeModal('modal-log-activity')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="act-modal-title">Log Attività</div>
+    <input type="hidden" id="act-type">
+    <input type="hidden" id="act-stat">
+    <div id="act-extra-fields"></div>
+    <label class="input-label">NOTE (opz.)</label>
+    <textarea class="sm" id="act-notes" placeholder="Come è andata?" style="margin-bottom:10px"></textarea>
+    <div class="btn-row">
+      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-log-activity')">Annulla</button>
+      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="logActivity()">Guadagna XP</button>
     </div>
   </div>
 </div>
@@ -249,33 +245,33 @@
     <div class="modal-handle"></div>
     <div class="modal-title">📖 Aggiungi Libro</div>
     <label class="input-label">TITOLO</label>
-    <input class="sm" id="bk-title" placeholder="es. Il Signore degli Anelli">
+    <input class="sm" id="bk-title" placeholder="es. Il Signore degli Anelli" style="margin-bottom:10px">
     <label class="input-label">AUTORE</label>
-    <input class="sm" id="bk-author" placeholder="es. J.R.R. Tolkien">
+    <input class="sm" id="bk-author" placeholder="es. J.R.R. Tolkien" style="margin-bottom:10px">
     <label class="input-label">GENERE / CATEGORIA</label>
-    <select class="sm" id="bk-genre">
-      <option value="saggistica">📰 Saggistica</option><option value="filosofia">🧠 Filosofia</option>
-      <option value="scienza">🔬 Scienza</option><option value="storia">🏛️ Storia</option>
-      <option value="economia">📈 Economia</option><option value="narrativa">📖 Narrativa</option>
-      <option value="self-help">🌱 Self-help</option><option value="tecnico">⚙️ Tecnico</option>
+    <select class="sm" id="bk-genre" style="margin-bottom:10px">
+      <option value="saggistica">📰 Saggistica</option>
+      <option value="filosofia">🧠 Filosofia</option>
+      <option value="scienza">🔬 Scienza</option>
+      <option value="storia">🏛️ Storia</option>
+      <option value="economia">📈 Economia</option>
+      <option value="narrativa">📖 Narrativa</option>
+      <option value="self-help">🌱 Self-help</option>
+      <option value="tecnico">⚙️ Tecnico</option>
       <option value="altro">⭐ Altro</option>
     </select>
-    <label class="input-label">DIFFICOLTÀ (1–5)</label>
-    <select class="sm" id="bk-diff">
-      <option value="1">⭐ Molto facile — bonus fine +50 XP</option>
-      <option value="2">⭐⭐ Facile — bonus fine +150 XP</option>
-      <option value="3" selected>⭐⭐⭐ Medio — bonus fine +300 XP</option>
-      <option value="4">⭐⭐⭐⭐ Difficile — bonus fine +500 XP</option>
-      <option value="5">⭐⭐⭐⭐⭐ Molto difficile — bonus fine +800 XP</option>
+    <label class="input-label">DIFFICOLTÀ</label>
+    <select class="sm" id="bk-diff" style="margin-bottom:10px">
+      <option value="1">⭐ Molto facile +50 XP</option>
+      <option value="2">⭐⭐ Facile +150 XP</option>
+      <option value="3" selected>⭐⭐⭐ Medio +300 XP</option>
+      <option value="4">⭐⭐⭐⭐ Difficile +500 XP</option>
+      <option value="5">⭐⭐⭐⭐⭐ Molto difficile +800 XP</option>
     </select>
     <label class="input-label">NUMERO PAGINE TOTALI</label>
-    <input class="sm" id="bk-pages" type="number" placeholder="es. 320" min="1">
+    <input class="sm" id="bk-pages" type="number" placeholder="es. 320" min="1" style="margin-bottom:10px">
     <label class="input-label">EMOJI COPERTINA</label>
-    <input class="sm" id="bk-emoji" placeholder="📖" maxlength="2">
-    <div class="visibility-toggle">
-      <div class="toggle-track on" id="bk-vis-toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
-      <span class="toggle-label">Visibile nel profilo pubblico</span>
-    </div>
+    <input class="sm" id="bk-emoji" placeholder="📖" maxlength="2" style="margin-bottom:10px">
     <div class="btn-row">
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-add-book')">Annulla</button>
       <button class="btn-sm btn-sm-primary" style="flex:2" onclick="addBook()">Inizia a leggere</button>
@@ -290,14 +286,12 @@
     <div class="modal-title" id="reading-modal-title">📖 Sessione lettura</div>
     <input type="hidden" id="rd-book-id">
     <label class="input-label">PAGINE LETTE OGGI</label>
-    <input class="sm" id="rd-pages" type="number" placeholder="es. 30" min="1">
+    <input class="sm" id="rd-pages" type="number" placeholder="es. 30" min="1" style="margin-bottom:10px">
     <label class="input-label">PAGINA CORRENTE (fino a)</label>
-    <input class="sm" id="rd-current" type="number" placeholder="es. 145" min="1">
+    <input class="sm" id="rd-current" type="number" placeholder="es. 145" min="1" style="margin-bottom:10px">
     <label class="input-label">NOTE / PENSIERI</label>
-    <textarea class="sm" id="rd-notes" placeholder="Cosa ti ha colpito di questa sessione?"></textarea>
-    <div id="rd-info" style="font-size:12px;color:var(--text3);margin-bottom:10px;background:var(--bg3);padding:10px;border-radius:var(--r2)">
-      Ogni pagina vale <b style="color:var(--gold)">3 XP</b> (cultura). Completare il libro sblocca il <b style="color:var(--accent2)">bonus difficoltà</b>.
-    </div>
+    <textarea class="sm" id="rd-notes" placeholder="Cosa ti ha colpito?" style="margin-bottom:10px"></textarea>
+    <div class="info-box">Ogni pagina vale <b style="color:var(--gold)">3 XP</b>. Completare il libro sblocca il <b style="color:var(--accent2)">bonus difficoltà</b>.</div>
     <div class="btn-row">
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-log-reading')">Annulla</button>
       <button class="btn-sm btn-sm-primary" style="flex:2" onclick="logReading()">Salva sessione</button>
@@ -311,13 +305,13 @@
     <div class="modal-handle"></div>
     <div class="modal-title">Nuovo Esame</div>
     <label class="input-label">NOME MATERIA</label>
-    <input class="sm" id="ex-name" placeholder="es. Economia Politica">
+    <input class="sm" id="ex-name" placeholder="es. Economia Politica" style="margin-bottom:10px">
     <label class="input-label">DATA ESAME</label>
-    <input class="sm" id="ex-date" type="date">
+    <input class="sm" id="ex-date" type="date" style="margin-bottom:10px">
     <label class="input-label">ORE DI STUDIO TARGET</label>
-    <input class="sm" id="ex-hours" type="number" placeholder="es. 40" min="1">
+    <input class="sm" id="ex-hours" type="number" placeholder="es. 40" min="1" style="margin-bottom:10px">
     <label class="input-label">EMOJI</label>
-    <input class="sm" id="ex-emoji" placeholder="📖" maxlength="2">
+    <input class="sm" id="ex-emoji" placeholder="📖" maxlength="2" style="margin-bottom:10px">
     <div class="btn-row">
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-add-exam')">Annulla</button>
       <button class="btn-sm btn-sm-primary" style="flex:2" onclick="addExam()">Crea esame</button>
@@ -332,11 +326,14 @@
     <div class="modal-title">Aggiungi Capitolo</div>
     <input type="hidden" id="ch-exam-id">
     <label class="input-label">NOME CAPITOLO / ARGOMENTO</label>
-    <input class="sm" id="ch-name" placeholder="es. Cap. 1 – Microeconomia">
+    <input class="sm" id="ch-name" placeholder="es. Cap. 1 – Microeconomia" style="margin-bottom:10px">
     <label class="input-label">DIFFICOLTÀ</label>
-    <select class="sm" id="ch-diff">
-      <option value="1">Facile</option><option value="2">Normale</option><option value="3" selected>Medio</option>
-      <option value="4">Difficile</option><option value="5">Molto difficile</option>
+    <select class="sm" id="ch-diff" style="margin-bottom:10px">
+      <option value="1">Facile</option>
+      <option value="2">Normale</option>
+      <option value="3" selected>Medio</option>
+      <option value="4">Difficile</option>
+      <option value="5">Molto difficile</option>
     </select>
     <div class="btn-row">
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-add-chapter')">Annulla</button>
@@ -352,9 +349,9 @@
     <div class="modal-title">Aggiungi Concetto</div>
     <input type="hidden" id="co-chapter-id">
     <label class="input-label">CONCETTO / SOTTO-ARGOMENTO</label>
-    <input class="sm" id="co-name" placeholder="es. Elasticità della domanda">
+    <input class="sm" id="co-name" placeholder="es. Elasticità della domanda" style="margin-bottom:10px">
     <label class="input-label">NOTE</label>
-    <textarea class="sm" id="co-notes" placeholder="Definizione, appunti..."></textarea>
+    <textarea class="sm" id="co-notes" placeholder="Definizione, appunti..." style="margin-bottom:10px"></textarea>
     <div class="btn-row">
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-add-concept')">Annulla</button>
       <button class="btn-sm btn-sm-primary" style="flex:2" onclick="addConcept()">Aggiungi</button>
@@ -369,34 +366,20 @@
     <div class="modal-title">⏱️ Log Sessione Studio</div>
     <input type="hidden" id="ss-exam-id">
     <label class="input-label">MINUTI DI STUDIO</label>
-    <input class="sm" id="ss-mins" type="number" placeholder="es. 45" min="5">
+    <input class="sm" id="ss-mins" type="number" placeholder="es. 45" min="5" style="margin-bottom:10px">
     <label class="input-label">LIVELLO DI FOCUS (1–5)</label>
-    <select class="sm" id="ss-focus">
-      <option value="1">1 – Molto distratto</option><option value="2">2 – Poco focus</option>
-      <option value="3" selected>3 – Normale</option><option value="4">4 – Buon focus</option>
+    <select class="sm" id="ss-focus" style="margin-bottom:10px">
+      <option value="1">1 – Molto distratto</option>
+      <option value="2">2 – Poco focus</option>
+      <option value="3" selected>3 – Normale</option>
+      <option value="4">4 – Buon focus</option>
       <option value="5">5 – Laser ⚡</option>
     </select>
     <label class="input-label">NOTE</label>
-    <textarea class="sm" id="ss-notes" placeholder="Cosa hai studiato?"></textarea>
+    <textarea class="sm" id="ss-notes" placeholder="Cosa hai studiato?" style="margin-bottom:10px"></textarea>
     <div class="btn-row">
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-log-session')">Annulla</button>
       <button class="btn-sm btn-sm-primary" style="flex:2" onclick="logSession()">Salva sessione</button>
-    </div>
-  </div>
-</div>
-
-<!-- LOG ACTIVITY -->
-<div class="modal-overlay" id="modal-log-activity" onclick="if(event.target===this)closeModal('modal-log-activity')">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-title" id="act-modal-title">Log Attività</div>
-    <input type="hidden" id="act-type"><input type="hidden" id="act-stat">
-    <div id="act-extra-fields"></div>
-    <label class="input-label">NOTE (opz.)</label>
-    <textarea class="sm" id="act-notes" placeholder="Come è andata?"></textarea>
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-log-activity')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="logActivity()">Guadagna XP</button>
     </div>
   </div>
 </div>
@@ -407,17 +390,17 @@
     <div class="modal-handle"></div>
     <div class="modal-title">⚔️ Crea Sfida</div>
     <label class="input-label">TIPO SFIDA</label>
-    <select class="sm" id="pvp-type">
+    <select class="sm" id="pvp-type" style="margin-bottom:10px">
       <option value="athletic">🏋️ Atletica</option>
       <option value="mental">🧠 Mentale</option>
       <option value="mixed">🔀 Mista</option>
     </select>
-    <label class="input-label">TITOLO / ARGOMENTO</label>
-    <input class="sm" id="pvp-title" placeholder="es. Chi legge più pagine in 7 giorni">
-    <label class="input-label">DESCRIZIONE DETTAGLIATA</label>
-    <textarea class="sm" id="pvp-desc" placeholder="Spiega l'obiettivo della sfida in dettaglio..."></textarea>
+    <label class="input-label">TITOLO</label>
+    <input class="sm" id="pvp-title" placeholder="es. Chi legge più pagine in 7 giorni" style="margin-bottom:10px">
+    <label class="input-label">DESCRIZIONE</label>
+    <textarea class="sm" id="pvp-desc" placeholder="Spiega l'obiettivo della sfida..." style="margin-bottom:10px"></textarea>
     <div class="divider"></div>
-    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📋 Regole della sfida</div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📋 Regole</div>
     <div id="pvp-rules-list"></div>
     <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
       <button class="btn-sm btn-sm-ghost" style="font-size:11px" onclick="addRule('metrica')">+ Metrica</button>
@@ -426,14 +409,10 @@
       <button class="btn-sm btn-sm-ghost" style="font-size:11px" onclick="addRule('penalita')">+ Penalità</button>
     </div>
     <div class="divider"></div>
-    <label class="input-label">XP IN PALIO PER IL VINCITORE</label>
-    <input class="sm" id="pvp-stake" type="number" placeholder="es. 20 (max 20)" min="5" max="20" value="20">
+    <label class="input-label">XP IN PALIO (max 20)</label>
+    <input class="sm" id="pvp-stake" type="number" placeholder="es. 20" min="5" max="20" value="20" style="margin-bottom:10px">
     <label class="input-label">SCADENZA</label>
-    <input class="sm" id="pvp-deadline" type="date">
-    <div class="visibility-toggle">
-      <div class="toggle-track on" id="pvp-rep-toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
-      <span class="toggle-label">Sfida replicabile (altri possono usare questo template)</span>
-    </div>
+    <input class="sm" id="pvp-deadline" type="date" style="margin-bottom:10px">
     <div class="btn-row">
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-create-challenge')">Annulla</button>
       <button class="btn-sm btn-sm-primary" style="flex:2" onclick="createChallenge()">Crea &amp; genera codice</button>
@@ -470,19 +449,10 @@
   </div>
 </div>
 
-<!-- VIEW CHALLENGE DETAIL -->
+<!-- CHALLENGE DETAIL -->
 <div class="modal-overlay" id="modal-challenge-detail" onclick="if(event.target===this)closeModal('modal-challenge-detail')">
   <div class="modal-sheet">
-    <div class="modal-handle"></div>
     <div id="challenge-detail-content"></div>
-  </div>
-</div>
-
-<!-- VIEW PROFILE -->
-<div class="modal-overlay" id="modal-profile" onclick="if(event.target===this)closeModal('modal-profile')">
-  <div class="modal-sheet" style="padding:0 0 34px">
-    <div style="padding:16px 22px 0;text-align:right"><button onclick="closeModal('modal-profile')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button></div>
-    <div id="profile-content"></div>
   </div>
 </div>
 
@@ -492,11 +462,11 @@
     <div class="modal-handle"></div>
     <div class="modal-title">Recupero password</div>
     <label class="input-label">USERNAME</label>
-    <input class="sm" id="pr-user" placeholder="il tuo username">
+    <input class="sm" id="pr-user" placeholder="il tuo username" style="margin-bottom:10px">
     <label class="input-label">PIN DI RECUPERO</label>
-    <input class="sm" id="pr-pin" type="text" maxlength="4" inputmode="numeric" placeholder="4 cifre">
+    <input class="sm" id="pr-pin" type="text" maxlength="4" inputmode="numeric" placeholder="4 cifre" style="margin-bottom:10px">
     <label class="input-label">NUOVA PASSWORD</label>
-    <input class="sm" id="pr-newpass" type="password" placeholder="nuova password">
+    <input class="sm" id="pr-newpass" type="password" placeholder="nuova password" style="margin-bottom:10px">
     <div id="pr-error" class="error-msg"></div>
     <div class="btn-row">
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-pin-reset')">Annulla</button>
@@ -505,15 +475,7 @@
   </div>
 </div>
 
-<!-- MODAL REPORT -->
-<div class="modal-overlay" id="modal-report" onclick="if(event.target===this)closeModal('modal-report')">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div id="report-content"></div>
-  </div>
-</div>
-
-<!-- MODAL PRIVACY -->
+<!-- PRIVACY -->
 <div class="modal-overlay" id="modal-privacy" onclick="if(event.target===this)closeModal('modal-privacy')">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
@@ -521,13 +483,13 @@
   </div>
 </div>
 
-<!-- MODAL RICERCA UTENTI / AMICI -->
+<!-- CERCA UTENTI / AMICI -->
 <div class="modal-overlay" id="modal-search-users" onclick="if(event.target===this)closeModal('modal-search-users')">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-title">🔍 Cerca utenti</div>
+    <div class="modal-title">🔍 Cerca &amp; Amici</div>
     <div style="display:flex;gap:8px;margin-bottom:4px">
-      <input class="sm" id="user-search-input" placeholder="Nome utente..." style="flex:1" onkeydown="if(event.key==='Enter')searchUser()">
+      <input class="sm" id="user-search-input" placeholder="Nome utente..." style="flex:1;margin:0" onkeydown="if(event.key==='Enter')searchUser()">
       <button class="btn-sm btn-sm-primary" onclick="searchUser()">Cerca</button>
     </div>
     <div id="user-search-results"></div>
@@ -539,8 +501,6 @@
 </div>
 
 <div id="toast"></div>
-
 <script src="script.js"></script>
 </body>
 </html>
- 
