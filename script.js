@@ -224,6 +224,7 @@ function awardXP(amount, stat, note, skipUpdate) {
   syncCUR(u);
   showToast(`+${xp} XP ✨ ${note || ''}`);
   spawnXPFloat(xp);
+  syncUserToCloud(u);
 
   if (!skipUpdate) updateDashboard();
   return xp;
@@ -340,34 +341,47 @@ async function doLogin() {
   err.textContent = 'Accesso in corso...';
 
   try {
-    const payload = encodeURIComponent(JSON.stringify({ username: user, password_hash }));
+    const payload  = encodeURIComponent(JSON.stringify({ username: user, password_hash }));
     const response = await fetch(`${API_URL}?action=LOGIN_USER&p=${payload}`);
-    const result = await response.json();
+    const result   = await response.json();
 
     if (result.success && result.user) {
-      let existing = DB.users.find(u => u.id === result.user.id);
+      const cloudUser = result.user;
+      let existing = DB.users.find(u => u.id === cloudUser.id);
       if (!existing) {
-        DB.users.push(result.user);
+        DB.users.push(cloudUser);
       } else {
-        Object.assign(existing, result.user);
+        // Merge: prendi i valori più alti tra locale e cloud
+        cloudUser.xp_total    = Math.max(existing.xp_total    || 0, cloudUser.xp_total    || 0);
+        cloudUser.level       = Math.max(existing.level       || 1, cloudUser.level       || 1);
+        cloudUser.streak_days = Math.max(existing.streak_days || 0, cloudUser.streak_days || 0);
+        const mergedStats = { ...(cloudUser.stats || {}) };
+        Object.keys(existing.stats || {}).forEach(k => {
+          mergedStats[k] = Math.max(mergedStats[k] || 0, existing.stats[k] || 0);
+        });
+        cloudUser.stats = mergedStats;
+        if (existing.trophies)                    cloudUser.trophies       = existing.trophies;
+        if (existing.public_profile !== undefined) cloudUser.public_profile = existing.public_profile;
+        Object.assign(existing, cloudUser);
       }
       saveDB();
-      saveUserSession(result.user);
-      syncCUR(result.user);
+      saveUserSession(cloudUser);
+      syncCUR(cloudUser);
       bootApp();
+      syncUserToCloud(cloudUser);
     } else {
       err.textContent = result.message || 'Credenziali errate o account non trovato';
     }
   } catch (ex) {
-    // Fallback locale in caso di errore di rete / 404 / blocco CORS
-    console.warn("Fallback offline attivato:", ex);
-    let u = DB.users.find(u => u.username.toLowerCase() === user.toLowerCase());
+    console.warn('Fallback offline attivato:', ex);
+    const u = DB.users.find(u => u.username.toLowerCase() === user.toLowerCase());
     if (u) {
       saveUserSession(u);
       syncCUR(u);
       bootApp();
+      showToast('⚠️ Offline: dati locali caricati');
     } else {
-      err.textContent = "Impossibile connettersi al Cloud e utente non trovato in locale.";
+      err.textContent = 'Impossibile connettersi al Cloud e utente non trovato in locale.';
     }
   }
 }
@@ -1717,12 +1731,13 @@ function renderMyStats() {
       </div>
       <span class="toggle-label" style="font-size:12px">Profilo pubblico in leaderboard</span>
     </div>
-    <div style="display:flex;gap:8px;margin:10px 0 20px">
+    <div style="display:flex;gap:8px;margin:10px 0 12px">
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="exportData()">📤 Esporta JSON</button>
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="exportToExcelCSV()">📊 Esporta CSV</button>
       <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="document.getElementById('import-file').click()">📥 Importa</button>
       <input type="file" id="import-file" style="display:none" accept=".json" onchange="importData(this)">
     </div>
+    <button class="btn-sm btn-sm-red" style="width:100%;margin-bottom:24px" onclick="doLogout()">🚪 Esci dall'account</button>
   </div>`;
 
   document.getElementById('stats-container').innerHTML = html;
@@ -1735,8 +1750,9 @@ function toggleProfileVis() {
   u.public_profile = !u.public_profile;
   saveDB();
   syncCUR(u);
+  syncUserToCloud(u);
   document.getElementById('profile-vis-toggle').classList.toggle('on', u.public_profile);
-  showToast(u.public_profile ? '🌐 Profilo pubblico' : '🔒 Profilo privato');
+  showToast(u.public_profile ? '🌐 Profilo pubblico in leaderboard' : '🔒 Profilo privato');
 }
 
 function drawRadar(stats, maxVal) {
@@ -1806,29 +1822,38 @@ function drawRadar(stats, maxVal) {
   }
 }
 
-function renderLeaderboard() {
-  const users = DB.users
-    .filter(u => u.public_profile !== false)
-    .sort((a, b) => (b.xp_total || 0) - (a.xp_total || 0));
+async function renderLeaderboard() {
+  const container = document.getElementById('stats-container');
+  container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Caricamento leaderboard...</div>';
+
+  let users = [];
+  try {
+    const response = await fetch(`${API_URL}?action=GET_LEADERBOARD&p=`);
+    const result   = await response.json();
+    if (result.success) users = result.leaderboard || [];
+  } catch (e) {
+    users = DB.users
+      .filter(u => u.public_profile)
+      .map(u => ({ id: u.id, username: u.username, xp_total: u.xp_total || 0, level: u.level || 1, streak_days: u.streak_days || 0 }))
+      .sort((a, b) => b.xp_total - a.xp_total);
+    showToast('⚠️ Leaderboard offline');
+  }
 
   if (!users.length) {
-    document.getElementById('stats-container').innerHTML =
-      '<div class="empty"><div class="empty-emoji">🏆</div><div class="empty-text">Sii il primo in leaderboard!</div></div>';
+    container.innerHTML = '<div class="empty"><div class="empty-emoji">🏆</div><div class="empty-text">Sii il primo in leaderboard!</div></div>';
     return;
   }
 
   const rankCls = ['gold', 'silver', 'bronze'];
-
-  document.getElementById('stats-container').innerHTML =
+  container.innerHTML =
     '<div style="padding:0 20px 20px">' +
     users.map((u, i) => {
-      const isMe        = u.id === CUR.id;
-      const trophyCount = (u.trophies || []).length;
+      const isMe = CUR && u.id === CUR.id;
       return `<div class="lb-row" style="${isMe ? 'border-color:var(--accent)' : ''}" onclick="viewProfile('${u.id}')">
         <div class="lb-rank ${rankCls[i] || ''}">${i + 1}</div>
         <div class="lb-avatar">${u.username[0].toUpperCase()}</div>
         <div class="lb-info">
-          <div class="lb-name">${u.username}${isMe ? ' 👈' : ''} ${trophyCount ? `<span style="font-size:10px;color:var(--gold)">🏆×${trophyCount}</span>` : ''}</div>
+          <div class="lb-name">${u.username}${isMe ? ' 👈' : ''}</div>
           <div class="lb-xp">${(u.xp_total || 0).toLocaleString()} XP · ${u.streak_days || 0}🔥 streak</div>
         </div>
         <div class="lb-level">Lv.${u.level || 1}</div>
@@ -2002,6 +2027,72 @@ function openModal(id) {
 
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
+}
+
+
+/* ── RESET PASSWORD VIA PIN ── */
+async function doResetPin() {
+  const username     = document.getElementById('pr-user').value.trim();
+  const pin          = document.getElementById('pr-pin').value.trim();
+  const newPass      = document.getElementById('pr-newpass').value;
+  const errEl        = document.getElementById('pr-error');
+
+  if (!username || !/^\d{4}$/.test(pin) || newPass.length < 6) {
+    errEl.textContent = 'Compila tutti i campi correttamente (password min. 6 caratteri).';
+    return;
+  }
+
+  const pin_hash          = await hashStr(pin + 'lq_pin_v2');
+  const new_password_hash = await hashStr(newPass + 'lq_salt_v2');
+  errEl.textContent = 'Verifica in corso...';
+
+  try {
+    const payload  = encodeURIComponent(JSON.stringify({ username, pin_hash, new_password_hash }));
+    const response = await fetch(`${API_URL}?action=RESET_PIN&p=${payload}`);
+    const result   = await response.json();
+    if (result.success) {
+      const u = DB.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+      if (u) { u.password_hash = new_password_hash; saveDB(); }
+      closeModal('modal-pin-reset');
+      showToast('✅ Password reimpostata! Accedi con la nuova password.');
+    } else {
+      errEl.textContent = result.message || 'PIN o username errati.';
+    }
+  } catch (e) {
+    errEl.textContent = 'Errore di connessione. Riprova.';
+  }
+}
+
+/* ── LOGOUT ── */
+function doLogout() {
+  if (!confirm('Vuoi davvero uscire dall\'account?')) return;
+  CUR = null;
+  localStorage.removeItem('lq_cur_v2');
+  localStorage.removeItem('lifequest_user');
+  document.getElementById('app').style.display         = 'none';
+  document.getElementById('auth-screen').style.display = '';
+  document.getElementById('l-user').value  = '';
+  document.getElementById('l-pass').value  = '';
+  document.getElementById('auth-error').textContent = '';
+  showToast('👋 Logout effettuato');
+}
+
+/* ── SYNC CLOUD ── */
+async function syncUserToCloud(u) {
+  if (!u) return;
+  try {
+    await fetch(`${API_URL}?action=SYNC_USER_DATA&p=` + encodeURIComponent(JSON.stringify({
+      user_id:        u.id,
+      xp_total:       u.xp_total       || 0,
+      level:          u.level          || 1,
+      streak_days:    u.streak_days    || 0,
+      last_active:    u.last_active    || today(),
+      public_profile: u.public_profile || false,
+      stats:          u.stats          || {}
+    })));
+  } catch (e) {
+    console.warn('Sync cloud fallita:', e);
+  }
 }
 
 
