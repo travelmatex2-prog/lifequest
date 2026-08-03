@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -173,7 +174,11 @@
     <button class="tab active" onclick="switchStatsTab('stats')">Le mie</button>
     <button class="tab" onclick="switchStatsTab('leaderboard')">Leaderboard</button>
   </div>
-  <div id="stats-container"></div>
+  <div style="padding:14px 20px 0;display:flex;gap:8px">
+  <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="openModal('modal-search-users');renderFriendsList()">👥 Cerca & Amici</button>
+  <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="openPrivacySettings()">🔒 Privacy</button>
+</div>
+<div id="stats-container"></div>
 </div>
 
 </div><!-- /main-content -->
@@ -422,7 +427,7 @@
     </div>
     <div class="divider"></div>
     <label class="input-label">XP IN PALIO PER IL VINCITORE</label>
-    <input class="sm" id="pvp-stake" type="number" placeholder="es. 300" min="50">
+    <input class="sm" id="pvp-stake" type="number" placeholder="es. 20 (max 20)" min="5" max="20" value="20">
     <label class="input-label">SCADENZA</label>
     <input class="sm" id="pvp-deadline" type="date">
     <div class="visibility-toggle">
@@ -500,9 +505,41 @@
   </div>
 </div>
 
+<!-- MODAL REPORT -->
+<div class="modal-overlay" id="modal-report" onclick="if(event.target===this)closeModal('modal-report')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div id="report-content"></div>
+  </div>
+</div>
+
+<!-- MODAL PRIVACY -->
+<div class="modal-overlay" id="modal-privacy" onclick="if(event.target===this)closeModal('modal-privacy')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div id="privacy-content"></div>
+  </div>
+</div>
+
+<!-- MODAL RICERCA UTENTI / AMICI -->
+<div class="modal-overlay" id="modal-search-users" onclick="if(event.target===this)closeModal('modal-search-users')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔍 Cerca utenti</div>
+    <div style="display:flex;gap:8px;margin-bottom:4px">
+      <input class="sm" id="user-search-input" placeholder="Nome utente..." style="flex:1" onkeydown="if(event.key==='Enter')searchUser()">
+      <button class="btn-sm btn-sm-primary" onclick="searchUser()">Cerca</button>
+    </div>
+    <div id="user-search-results"></div>
+    <div style="margin-top:16px">
+      <div class="section-hd"><span class="section-title">I tuoi amici</span></div>
+      <div id="friends-list"></div>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script src="script.js"></script>
 </body>
 </html>
- 
