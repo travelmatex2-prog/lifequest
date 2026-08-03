@@ -1381,4 +1381,4 @@ window.addEventListener('load', async()=>{
   }
 });
 
-echo "Lines: $(wc -l < /home/claude/script.js)"
+
