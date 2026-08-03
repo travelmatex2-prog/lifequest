@@ -1,13 +1,14 @@
 /* ============================================================
-   LIFEQUEST — script.js  v3.0
-   Architettura: ogni operazione scrive prima localmente,
-   poi sincronizza col cloud (Google Sheets via GAS).
-   Il login ricarica TUTTO dal cloud → persistenza reale.
+   LIFEQUEST — script.js v4.0 FIXED
+   Architettura: local-first + cloud sync via GAS POST.
+   FIX: rimosso GET_FULL_USER_DATA (non implementato lato GAS),
+   renderTab ora gestisce life/stats, profile-container presente,
+   tutte le azioni cloud ora usano solo endpoint esistenti.
    ============================================================ */
 
 /* ── 1. COSTANTI ── */
-const API_URL = "https://script.google.com/macros/s/AKfycbxzRzGWbXAEkrd8epZL7d-20xEmwo_0JX4tNfxb24wI5rrNIy9Lhz3zik7iK-Q_3NBqqQ/exec";
-const DB_KEY  = 'lq_db_v3';
+const API_URL = "https://script.google.com/macros/s/AKfycbyp7uKrXx91u8obCjNvP9hLguG2qIa8OsmJTdqCsAfRCNp7dNBq_r49are-DhPKglBNjA/exec";
+const DB_KEY  = 'lq_db_v4';
 
 const RANK_TITLES = [
   'Novizio','Apprendista','Studioso','Veterano','Esperto',
@@ -27,7 +28,8 @@ const DIFF_MULT = [1,1,1.15,1.3,1.5,1.7];
 
 const CAT_STAT = {
   mente:'mente', corpo:'corpo', cultura:'cultura', sociale:'sociale',
-  'produttività':'produttività', athletic:'corpo', mental:'mente', mixed:'mente'
+  'produttività':'produttività', athletic:'corpo', mental:'mente', mixed:'mente',
+  altro:'produttività', sfide:'sfide'
 };
 
 const STAT_COLORS = {
@@ -80,7 +82,7 @@ function saveDB() {
 
 let DB  = loadDB();
 let CUR = null;
-try { CUR = JSON.parse(localStorage.getItem('lq_cur_v3') || 'null'); } catch(e) {}
+try { CUR = JSON.parse(localStorage.getItem('lq_cur_v4') || 'null'); } catch(e) {}
 
 /* ── 3. UTILITÀ ── */
 function uid() { return Math.random().toString(36).substr(2,9) + Date.now().toString(36); }
@@ -95,17 +97,19 @@ async function hashStr(s) {
 function randCode() { return 'LQ-'+Math.floor(1000+Math.random()*9000); }
 function diffStars(d){ return '⭐'.repeat(Math.max(1,d||1)); }
 
+/* ── API: usa GET con ?action=&p= per evitare CORS preflight ── */
 async function apiCall(action, payload) {
   try {
-    const res = await fetch(API_URL, {
-      method:'POST',
-      headers:{'Content-Type':'text/plain'},
-      body: JSON.stringify({ action, payload })
+    const p = encodeURIComponent(JSON.stringify(payload || {}));
+    const res = await fetch(`${API_URL}?action=${action}&p=${p}`, {
+      method: 'GET',
+      redirect: 'follow'
     });
-    return await res.json();
+    const text = await res.text();
+    return JSON.parse(text);
   } catch(e) {
     console.warn('API call failed:', action, e);
-    return { success:false, error:e.toString() };
+    return { success: false, error: e.toString() };
   }
 }
 
@@ -139,7 +143,6 @@ function awardXP(amount, stat, note, skipUpdate) {
   saveDB(); syncCUR(u);
   showToast(`+${xp} XP ✨ ${note||''}`);
   spawnXPFloat(xp);
-  // Sync XP al cloud immediatamente
   apiCall('SYNC_USER_DATA', buildUserPayload(u));
   if(!skipUpdate) updateDashboard();
   return xp;
@@ -151,14 +154,12 @@ function buildUserPayload(u) {
     xp_total:u.xp_total||0, level:u.level||1,
     streak_days:u.streak_days||0, last_active:u.last_active||today(),
     public_profile:u.public_profile||false,
-    stats:u.stats||{}, trophies:u.trophies||[],
-    privacy:u.privacy||{}, friends:u.friends||[],
-    friend_names:u.friend_names||{}, avatar:u.avatar||''
+    stats:u.stats||{}
   };
 }
 
 function getUser(id) { return DB.users.find(u=>u.id===id); }
-function syncCUR(u)  { CUR=u; localStorage.setItem('lq_cur_v3',JSON.stringify(u)); }
+function syncCUR(u)  { CUR=u; localStorage.setItem('lq_cur_v4',JSON.stringify(u)); }
 
 /* ── 5. EFFETTI VISIVI ── */
 function spawnXPFloat(xp) {
@@ -189,10 +190,6 @@ function hideLoading() {
   if(el) el.style.display='none';
 }
 
-function saveUserSession(u) {
-  try { localStorage.setItem('lifequest_user',JSON.stringify(u)); } catch(e) {}
-}
-
 /* ── 6. AUTENTICAZIONE ── */
 function switchAuthTab(tab) {
   document.querySelectorAll('.auth-tab').forEach((b,i)=>
@@ -208,9 +205,9 @@ async function doRegister() {
   const pass=document.getElementById('r-pass').value;
   const pin =document.getElementById('r-pin').value.trim();
   const err =document.getElementById('auth-error');
-  if(user.length<3)      {err.textContent='Username: min 3 caratteri';return;}
-  if(pass.length<6)      {err.textContent='Password: min 6 caratteri';return;}
-  if(!/^\d{4}$/.test(pin)){err.textContent='PIN: 4 cifre';return;}
+  if(user.length<3)       {err.textContent='Username: min 3 caratteri';return;}
+  if(pass.length<6)       {err.textContent='Password: min 6 caratteri';return;}
+  if(!/^\d{4}$/.test(pin)){err.textContent='PIN: 4 cifre numeriche';return;}
   const password_hash=await hashStr(pass+'lq_salt_v2');
   const pin_hash     =await hashStr(pin +'lq_pin_v2');
   err.textContent='Registrazione in corso...';
@@ -220,10 +217,10 @@ async function doRegister() {
       id:result.user_id, username:user, password_hash, pin_hash,
       xp_total:0, level:1, streak_days:0, last_active:today(),
       public_profile:false, avatar:'',
-      stats:{mente:0,corpo:0,cultura:0,sociale:0,produttività:0,sfide:0},
+      stats:{mente:0,corpo:0,cultura:0,sociale:0,'produttività':0,sfide:0},
       trophies:[], privacy:{}, friends:[], friend_names:{}
     };
-    DB.users.push(u); saveDB(); saveUserSession(u); syncCUR(u); bootApp();
+    DB.users.push(u); saveDB(); syncCUR(u); bootApp();
   } else { err.textContent=result.message||'Errore registrazione'; }
 }
 
@@ -234,97 +231,45 @@ async function doLogin() {
   if(!user||!pass){err.textContent='Inserisci username e password';return;}
   const password_hash=await hashStr(pass+'lq_salt_v2');
   err.textContent='Accesso in corso...';
-  showLoading('Login e sincronizzazione dati dal cloud...');
+  showLoading('Accesso in corso...');
   try {
     const result=await apiCall('LOGIN_USER',{username:user,password_hash});
+    hideLoading();
     if(result.success && result.user) {
       const cloudUser=result.user;
-      // Carica TUTTO dal cloud: utente+quest+sessioni+libri+attività
-      const fullData=await apiCall('GET_FULL_USER_DATA',{user_id:cloudUser.id});
-      hideLoading();
-      // Ricostruisci DB locale da zero con dati cloud
-      rebuildLocalFromCloud(cloudUser, fullData);
-      const u=getUser(cloudUser.id)||cloudUser;
-      saveUserSession(u); syncCUR(u); bootApp();
-      err.textContent='';
+      // Merge con dati locali se esistono
+      let localUser=DB.users.find(u=>u.id===cloudUser.id);
+      if(localUser) {
+        cloudUser.xp_total    = Math.max(localUser.xp_total||0, cloudUser.xp_total||0);
+        cloudUser.level       = Math.max(localUser.level||1,    cloudUser.level||1);
+        cloudUser.streak_days = Math.max(localUser.streak_days||0, cloudUser.streak_days||0);
+        // Mantieni dati solo-locali
+        cloudUser.trophies     = localUser.trophies||[];
+        cloudUser.privacy      = localUser.privacy||{};
+        cloudUser.friends      = localUser.friends||[];
+        cloudUser.friend_names = localUser.friend_names||{};
+        cloudUser.avatar       = localUser.avatar||'';
+        if(cloudUser.stats) {
+          Object.keys(localUser.stats||{}).forEach(k=>{
+            cloudUser.stats[k]=Math.max(cloudUser.stats[k]||0, localUser.stats[k]||0);
+          });
+        }
+        DB.users[DB.users.indexOf(localUser)]=cloudUser;
+      } else {
+        cloudUser.trophies=[]; cloudUser.privacy={}; cloudUser.friends=[]; cloudUser.friend_names={}; cloudUser.avatar='';
+        DB.users.push(cloudUser);
+      }
+      saveDB(); syncCUR(cloudUser); bootApp(); err.textContent='';
     } else {
-      hideLoading();
       // Fallback offline
       const local=DB.users.find(u=>u.username.toLowerCase()===user.toLowerCase() && u.password_hash===password_hash);
-      if(local){ saveUserSession(local); syncCUR(local); bootApp(); showToast('⚠️ Offline: dati locali'); }
+      if(local){ syncCUR(local); bootApp(); showToast('⚠️ Offline: dati locali'); }
       else err.textContent=result.message||'Credenziali errate';
     }
   } catch(e) {
     hideLoading();
     err.textContent='Errore di connessione.';
   }
-}
-
-function rebuildLocalFromCloud(cloudUser, fullData) {
-  // Utente
-  let idx=DB.users.findIndex(u=>u.id===cloudUser.id);
-  if(idx>=0) {
-    // Merge: cloud wins su XP/stats, locale wins su dati non-cloud
-    const local=DB.users[idx];
-    cloudUser.xp_total    = Math.max(local.xp_total||0,    cloudUser.xp_total||0);
-    cloudUser.level       = Math.max(local.level||1,        cloudUser.level||1);
-    cloudUser.streak_days = Math.max(local.streak_days||0,  cloudUser.streak_days||0);
-    if(cloudUser.stats) {
-      Object.keys(local.stats||{}).forEach(k=>{
-        cloudUser.stats[k]=Math.max(cloudUser.stats[k]||0, local.stats[k]||0);
-      });
-    }
-    DB.users[idx]=cloudUser;
-  } else { DB.users.push(cloudUser); }
-
-  if(fullData && fullData.success) {
-    // Merge quests
-    if(fullData.quests) {
-      fullData.quests.forEach(q=>{
-        if(!DB.quests.find(x=>x.id===q.id)) DB.quests.push(q);
-      });
-    }
-    // Merge sessioni studio
-    if(fullData.sessions) {
-      fullData.sessions.forEach(s=>{
-        if(!DB.sessions.find(x=>x.id===s.id)) DB.sessions.push(s);
-      });
-    }
-    // Merge libri
-    if(fullData.books) {
-      fullData.books.forEach(b=>{
-        const idx=DB.books.findIndex(x=>x.id===b.id);
-        if(idx>=0) DB.books[idx]=b; else DB.books.push(b);
-      });
-    }
-    // Merge sessioni lettura
-    if(fullData.book_sessions) {
-      fullData.book_sessions.forEach(s=>{
-        if(!DB.book_sessions.find(x=>x.id===s.id)) DB.book_sessions.push(s);
-      });
-    }
-    // Merge attività
-    if(fullData.activities) {
-      fullData.activities.forEach(a=>{
-        if(!DB.activities.find(x=>x.id===a.id)) DB.activities.push(a);
-      });
-    }
-    // Merge esami+capitoli+concetti
-    if(fullData.exams) {
-      fullData.exams.forEach(e=>{ if(!DB.exams.find(x=>x.id===e.id)) DB.exams.push(e); });
-    }
-    if(fullData.chapters) {
-      fullData.chapters.forEach(c=>{ if(!DB.chapters.find(x=>x.id===c.id)) DB.chapters.push(c); });
-    }
-    if(fullData.concepts) {
-      fullData.concepts.forEach(c=>{ if(!DB.concepts.find(x=>x.id===c.id)) DB.concepts.push(c); });
-    }
-    // Merge sfide
-    if(fullData.challenges) {
-      fullData.challenges.forEach(c=>{ if(!DB.challenges.find(x=>x.id===c.id)) DB.challenges.push(c); });
-    }
-  }
-  saveDB();
 }
 
 /* ── 7. NAVIGAZIONE ── */
@@ -335,8 +280,17 @@ function gotoTab(tab) {
   document.getElementById('nav-'+tab).classList.add('active');
   renderTab(tab); window.scrollTo(0,0);
 }
+
 function renderTab(t) {
-  ({home:renderHome,quest:renderQuests,study:renderStudy,pvp:renderPvP,profile:renderProfile}[t]||function(){})();
+  const map = {
+    home:   renderHome,
+    quest:  renderQuests,
+    study:  renderStudy,
+    life:   renderLife,
+    pvp:    renderPvP,
+    stats:  renderStats
+  };
+  if(map[t]) map[t]();
 }
 
 /* ── 8. DASHBOARD ── */
@@ -354,12 +308,6 @@ function updateDashboard() {
   document.getElementById('xp-bar').style.width=pct+'%';
   document.getElementById('xp-cur').textContent=xpCur.toLocaleString()+' XP';
   document.getElementById('xp-next').textContent='→ Lv.'+(lvl+1)+' ('+xpNxt.toLocaleString()+' XP)';
-  // Avatar mini
-  const av=document.getElementById('hd-avatar');
-  if(av) {
-    if(u.avatar) { av.innerHTML=`<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; }
-    else { av.textContent=u.username[0].toUpperCase(); }
-  }
   const s=u.stats||{};
   ['mente','corpo','cultura','sociale','sfide'].forEach(k=>{
     const el=document.getElementById('ds-'+k);
@@ -377,7 +325,7 @@ function renderHome() {
       <div class="quest-card">
         <div class="quest-check" onclick="toggleQuest('${q.id}',event)"></div>
         <div class="quest-body">
-          <div class="quest-name">${q.name}</div>
+          <div class="quest-name">${escHtml(q.name)}</div>
           <div class="quest-meta">
             <span class="tag tag-xp">⚡${q.xp_base} XP</span>
             <span class="tag tag-cat">${q.category}</span>
@@ -391,12 +339,16 @@ function renderHome() {
     <div class="session-row">
       <div class="session-dot"></div>
       <div class="session-info">
-        <div class="session-name">${a.name}</div>
+        <div class="session-name">${escHtml(a.name)}</div>
         <div class="session-time">${new Date(a.date).toLocaleDateString('it')}</div>
       </div>
       <div class="session-xp">+${a.xp} XP</div>
     </div>`).join('')
     || '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessuna attività recente.</div>';
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 /* ── 9. QUEST ── */
@@ -422,13 +374,13 @@ function renderQuests() {
     <div class="quest-card">
       <div class="quest-check ${q.completed?'done':''}" onclick="toggleQuest('${q.id}',event)"></div>
       <div class="quest-body">
-        <div class="quest-name ${q.completed?'done':''}">${q.name}</div>
+        <div class="quest-name ${q.completed?'done':''}">${escHtml(q.name)}</div>
         <div class="quest-meta">
           <span class="tag tag-xp">⚡${q.xp_base} XP</span>
           <span class="tag tag-cat">${q.category}</span>
           ${q.completed?'<span class="tag tag-green">✅</span>':''}
         </div>
-        ${q.notes?`<div style="font-size:11px;color:var(--text3);margin-top:4px">${q.notes}</div>`:''}
+        ${q.notes?`<div style="font-size:11px;color:var(--text3);margin-top:4px">${escHtml(q.notes)}</div>`:''}
         ${q.completed&&q.completed_at?`<div style="font-size:10px;color:var(--text3);margin-top:2px">📅 ${new Date(q.completed_at).toLocaleDateString('it')}</div>`:''}
       </div>
       ${!q.completed?`<button class="btn-sm btn-sm-red" style="font-size:10px;padding:4px 8px" onclick="deleteQuest('${q.id}',event)">✕</button>`:''}
@@ -459,7 +411,7 @@ function renderQuestCalendar(container) {
   html+='</div>';
   const dayQ=completedQ.filter(q=>{ const d=q.completed_at?new Date(q.completed_at).toISOString().split('T')[0]:''; return d===selectedCalDate; });
   html+=`<div style="margin-top:16px"><div class="section-hd"><span class="section-title">Quest del ${selectedCalDate} (${dayQ.length})</span></div>
-  ${dayQ.length?dayQ.map(q=>`<div class="quest-card"><div class="quest-body"><div class="quest-name done">${q.name}</div><div class="quest-meta"><span class="tag tag-xp">⚡${q.xp_base} XP</span><span class="tag tag-cat">${q.category}</span></div></div></div>`).join('')
+  ${dayQ.length?dayQ.map(q=>`<div class="quest-card"><div class="quest-body"><div class="quest-name done">${escHtml(q.name)}</div><div class="quest-meta"><span class="tag tag-xp">⚡${q.xp_base} XP</span><span class="tag tag-cat">${q.category}</span></div></div></div>`).join('')
   :'<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessuna quest completata in questa data.</div>'}</div>`;
   container.innerHTML=html;
 }
@@ -482,8 +434,6 @@ function addQuest() {
   closeModal('modal-add-quest');
   document.getElementById('q-name').value=''; document.getElementById('q-notes').value='';
   renderQuests(); showToast('⚔️ Quest aggiunta!');
-  // Sync al cloud
-  apiCall('ADD_QUEST',{ quest:q });
 }
 
 function deleteQuest(id, e) {
@@ -499,29 +449,92 @@ async function toggleQuest(id,e) {
   const stat=CAT_STAT[q.category]||'produttività';
   awardXP(q.xp_base,stat,'— '+q.name);
   checkTrophies(); renderQuests();
-  // Sync completo al cloud
-  const r=await apiCall('COMPLETE_QUEST',{
-    quest_id:q.id, user_id:CUR.id, name:q.name, category:q.category,
+  await apiCall('COMPLETE_QUEST',{
+    user_id:CUR.id, name:q.name, category:q.category,
     difficulty:q.difficulty||1, type:q.type||'quest',
-    notes:q.notes||'', xp_base:q.xp_base, completed_at:q.completed_at
+    notes:q.notes||'', xp_base:q.xp_base
   });
-  if(!r.success) console.warn('Sync quest failed');
 }
 
-/* ── 10. LIBRI ── */
+/* ── 10. VITA (ACTIVITIES) ── */
+function renderLife() {
+  const grid=document.getElementById('activity-grid');
+  grid.innerHTML=ACTIVITIES.map(a=>`
+    <div class="activity-tile" onclick="openActivityModal('${a.type}')">
+      <div class="activity-emoji">${a.emoji}</div>
+      <div class="activity-name">${a.name}</div>
+      <div class="activity-xp">+${a.xp_base} XP base</div>
+    </div>`).join('');
+  const log=DB.activities.filter(a=>a.user_id===CUR.id).sort((a,b)=>b.date-a.date).slice(0,12);
+  document.getElementById('life-log-list').innerHTML=log.map(a=>`
+    <div class="session-row">
+      <div class="session-dot" style="background:${STAT_COLORS[a.stat]||'var(--accent)'}"></div>
+      <div class="session-info">
+        <div class="session-name">${escHtml(a.name)}</div>
+        <div class="session-time">${new Date(a.date).toLocaleString('it')}</div>
+      </div>
+      <div class="session-xp">+${a.xp} XP</div>
+    </div>`).join('')
+    || '<div style="color:var(--text3);font-size:12px;padding:8px 20px">Nessuna attività ancora.</div>';
+}
+
+function openActivityModal(type) {
+  const act=ACTIVITIES.find(a=>a.type===type); if(!act) return;
+  document.getElementById('act-type').value=type;
+  document.getElementById('act-stat').value=act.stat;
+  document.getElementById('act-modal-title').textContent=act.emoji+' '+act.name;
+  document.getElementById('act-notes').value='';
+  let extra='';
+  if(act.extra==='mins') extra=`<label class="input-label">MINUTI</label><input class="sm" id="act-mins" type="number" placeholder="es. 45" min="1" style="margin-bottom:10px">`;
+  else if(act.extra==='workout') extra=`<label class="input-label">ESERCIZI FATTI</label><input class="sm" id="act-workout" placeholder="es. Petto + Tricipiti" style="margin-bottom:10px">`;
+  else if(act.extra==='custom') {
+    extra=`<label class="input-label">NOME ATTIVITÀ</label><input class="sm" id="act-custom-name" placeholder="es. Meditazione" style="margin-bottom:10px">
+    <label class="input-label">XP GUADAGNATI</label><input class="sm" id="act-custom-xp" type="number" placeholder="es. 30" min="1" style="margin-bottom:10px">`;
+  }
+  document.getElementById('act-extra-fields').innerHTML=extra;
+  openModal('modal-log-activity');
+}
+
+async function logActivity() {
+  const type=document.getElementById('act-type').value;
+  const stat=document.getElementById('act-stat').value;
+  const act=ACTIVITIES.find(a=>a.type===type);
+  if(!act) return;
+  const notes=document.getElementById('act-notes').value;
+  let xp=act.xp_base, name=act.name;
+  if(act.extra==='mins') {
+    const mins=parseInt(document.getElementById('act-mins')?.value)||0;
+    xp=Math.round(act.xp_base*(mins/30)); if(xp<5) xp=5;
+    name=act.emoji+' '+act.name+' ('+mins+' min)';
+  } else if(act.extra==='workout') {
+    const w=document.getElementById('act-workout')?.value||'';
+    name=act.emoji+' Palestra'+( w?' — '+w:'');
+  } else if(act.extra==='custom') {
+    const cn=document.getElementById('act-custom-name')?.value||'Custom';
+    xp=parseInt(document.getElementById('act-custom-xp')?.value)||25;
+    name='⭐ '+cn;
+  }
+  const a={id:uid(),user_id:CUR.id,name,date:ts(),xp,stat,type,notes};
+  DB.activities.push(a); saveDB();
+  closeModal('modal-log-activity');
+  awardXP(xp,stat,'— '+act.name); checkTrophies(); renderLife();
+  await apiCall('LOG_ACTIVITY',{user_id:CUR.id,type,name,xp,stat,notes});
+}
+
+/* ── 11. LIBRI ── */
 function renderBooks(c) {
   const books=DB.books.filter(b=>b.user_id===CUR.id);
   if(!books.length){ c.innerHTML='<div class="empty"><div class="empty-emoji">📚</div><div class="empty-text">Aggiungi il tuo primo libro!</div></div>'; return; }
   c.innerHTML=books.map(b=>{
     const pct=b.total_pages?Math.round((b.current_page||0)/b.total_pages*100):0;
-    const done=b.current_page>=b.total_pages&&b.total_pages>0;
+    const done=(b.current_page||0)>=(b.total_pages||Infinity)&&b.total_pages>0;
     const sessions=DB.book_sessions.filter(s=>s.book_id===b.id).length;
     return `<div class="book-card">
       <div class="book-head">
         <div class="book-cover">${b.emoji||'📖'}</div>
         <div class="book-meta">
-          <div class="book-title">${b.title}</div>
-          <div class="book-author">${b.author||'—'}</div>
+          <div class="book-title">${escHtml(b.title)}</div>
+          <div class="book-author">${escHtml(b.author||'—')}</div>
           <div class="book-tags"><span class="tag tag-cat">${b.genre||'—'}</span><span class="tag tag-orange">${diffStars(b.difficulty)}</span>${done?'<span class="tag tag-green">✅</span>':''}</div>
           <div class="book-progress-wrap"><div class="book-progress-fill" style="width:${pct}%"></div></div>
           <div class="book-progress-nums"><span>${b.current_page||0} / ${b.total_pages||'?'} pag.</span><span>${pct}% · ${sessions} sessioni</span></div>
@@ -530,7 +543,7 @@ function renderBooks(c) {
       ${!done?`<div class="book-actions">
         <button class="btn-sm btn-sm-primary" style="font-size:11px;flex:1" onclick="openReadingModal('${b.id}')">📖 +Pagine</button>
         <button class="btn-sm btn-sm-ghost" style="font-size:11px" onclick="markBookDone('${b.id}')">✅ Finito</button>
-      </div>`:`<div style="font-size:11px;color:var(--green);padding-top:8px;text-align:center;font-weight:700">🏆 Bonus ${BOOK_DIFF_BONUS[b.difficulty]} XP!</div>`}
+      </div>`:`<div style="font-size:11px;color:var(--green);padding-top:8px;text-align:center;font-weight:700">🏆 Bonus ${BOOK_DIFF_BONUS[b.difficulty]||0} XP!</div>`}
     </div>`;
   }).join('');
 }
@@ -551,7 +564,6 @@ function addBook() {
   closeModal('modal-add-book');
   ['bk-title','bk-author','bk-pages','bk-emoji'].forEach(id=>{ document.getElementById(id).value=''; });
   renderStudy(); showToast('📚 Libro aggiunto!');
-  apiCall('ADD_BOOK',{book:b});
 }
 
 function openReadingModal(bookId) {
@@ -575,13 +587,11 @@ async function logReading() {
   const stat=BOOK_GENRE_STAT[b.genre]||'cultura';
   const sess={id:uid(),user_id:CUR.id,book_id:bookId,date:ts(),pages,current_page:b.current_page,notes:document.getElementById('rd-notes').value,xp};
   DB.book_sessions.push(sess);
-  const act={id:uid(),user_id:CUR.id,name:'📖 '+b.title+' ('+pages+'pp)',date:ts(),xp,stat,type:'reading'};
-  DB.activities.push(act);
+  DB.activities.push({id:uid(),user_id:CUR.id,name:'📖 '+b.title+' ('+pages+'pp)',date:ts(),xp,stat,type:'reading'});
   saveDB(); closeModal('modal-log-reading');
   awardXP(xp,stat,'— Lettura: '+b.title);
   if(b.total_pages&&b.current_page>=b.total_pages&&!b.completed) markBookDone(bookId,true);
   else renderStudy();
-  await apiCall('LOG_READING',{session:sess, book_update:{id:b.id,current_page:b.current_page}, activity:act});
 }
 
 async function markBookDone(bookId,silent) {
@@ -593,66 +603,28 @@ async function markBookDone(bookId,silent) {
   const stat=BOOK_GENRE_STAT[b.genre]||'cultura';
   awardXP(bonus,stat,'— 🏆 Libro completato: '+b.title);
   checkTrophies(); renderStudy();
-  await apiCall('COMPLETE_BOOK',{book_id:bookId,user_id:CUR.id,completed_at:b.completed_at});
 }
 
-/* ── 11. TROFEI (ESTESI) ── */
+/* ── 12. TROFEI ── */
 const TROPHY_DEFS = [
-  // QUEST
-  {id:'first_quest',  name:'Prima quest',         emoji:'⚔️',  cat:'Quest',   check:()=>DB.quests.filter(q=>q.user_id===CUR.id&&q.completed).length>=1},
-  {id:'quest_5',      name:'5 quest',              emoji:'🗡️',  cat:'Quest',   check:()=>DB.quests.filter(q=>q.user_id===CUR.id&&q.completed).length>=5},
-  {id:'quest_10',     name:'10 quest',             emoji:'🌟',  cat:'Quest',   check:()=>DB.quests.filter(q=>q.user_id===CUR.id&&q.completed).length>=10},
-  {id:'quest_25',     name:'25 quest',             emoji:'💫',  cat:'Quest',   check:()=>DB.quests.filter(q=>q.user_id===CUR.id&&q.completed).length>=25},
-  {id:'quest_50',     name:'50 quest',             emoji:'🎖️', cat:'Quest',   check:()=>DB.quests.filter(q=>q.user_id===CUR.id&&q.completed).length>=50},
-  {id:'quest_100',    name:'100 quest',            emoji:'🏅',  cat:'Quest',   check:()=>DB.quests.filter(q=>q.user_id===CUR.id&&q.completed).length>=100},
-  {id:'quest_hard',   name:'Quest difficile',      emoji:'💀',  cat:'Quest',   check:()=>DB.quests.filter(q=>q.user_id===CUR.id&&q.completed&&q.difficulty>=4).length>=1},
-  // STREAK
-  {id:'streak_3',     name:'Streak 3 giorni',      emoji:'🔥',  cat:'Streak',  check:()=>(getUser(CUR.id)?.streak_days||0)>=3},
-  {id:'streak_7',     name:'Streak 7 giorni',      emoji:'🔥',  cat:'Streak',  check:()=>(getUser(CUR.id)?.streak_days||0)>=7},
-  {id:'streak_14',    name:'Streak 2 settimane',   emoji:'🌙',  cat:'Streak',  check:()=>(getUser(CUR.id)?.streak_days||0)>=14},
-  {id:'streak_30',    name:'Streak 30 giorni',     emoji:'⚡',  cat:'Streak',  check:()=>(getUser(CUR.id)?.streak_days||0)>=30},
-  {id:'streak_60',    name:'Streak 60 giorni',     emoji:'🌠',  cat:'Streak',  check:()=>(getUser(CUR.id)?.streak_days||0)>=60},
-  {id:'streak_100',   name:'Streak 100 giorni',    emoji:'🌞',  cat:'Streak',  check:()=>(getUser(CUR.id)?.streak_days||0)>=100},
-  // LIVELLO
-  {id:'level_3',      name:'Livello 3',            emoji:'🌱',  cat:'Livello', check:()=>(getUser(CUR.id)?.level||0)>=3},
-  {id:'level_5',      name:'Livello 5',            emoji:'⭐',  cat:'Livello', check:()=>(getUser(CUR.id)?.level||0)>=5},
-  {id:'level_10',     name:'Livello 10',           emoji:'🌍',  cat:'Livello', check:()=>(getUser(CUR.id)?.level||0)>=10},
-  {id:'level_20',     name:'Livello 20',           emoji:'🌌',  cat:'Livello', check:()=>(getUser(CUR.id)?.level||0)>=20},
-  {id:'level_50',     name:'Livello 50',           emoji:'🏆',  cat:'Livello', check:()=>(getUser(CUR.id)?.level||0)>=50},
-  // XP
-  {id:'xp_1000',      name:'1.000 XP',             emoji:'💎',  cat:'XP',      check:()=>(getUser(CUR.id)?.xp_total||0)>=1000},
-  {id:'xp_5000',      name:'5.000 XP',             emoji:'💍',  cat:'XP',      check:()=>(getUser(CUR.id)?.xp_total||0)>=5000},
-  {id:'xp_10000',     name:'10.000 XP',            emoji:'👑',  cat:'XP',      check:()=>(getUser(CUR.id)?.xp_total||0)>=10000},
-  {id:'xp_50000',     name:'50.000 XP',            emoji:'🌈',  cat:'XP',      check:()=>(getUser(CUR.id)?.xp_total||0)>=50000},
-  // LIBRI
-  {id:'first_book',   name:'Primo libro',          emoji:'📚',  cat:'Lettura', check:()=>DB.books.filter(b=>b.user_id===CUR.id&&b.completed).length>=1},
-  {id:'books_3',      name:'3 libri',              emoji:'📖',  cat:'Lettura', check:()=>DB.books.filter(b=>b.user_id===CUR.id&&b.completed).length>=3},
-  {id:'books_5',      name:'5 libri',              emoji:'📗',  cat:'Lettura', check:()=>DB.books.filter(b=>b.user_id===CUR.id&&b.completed).length>=5},
-  {id:'books_10',     name:'10 libri',             emoji:'📕',  cat:'Lettura', check:()=>DB.books.filter(b=>b.user_id===CUR.id&&b.completed).length>=10},
-  {id:'books_hard',   name:'Libro difficile',      emoji:'🧠',  cat:'Lettura', check:()=>DB.books.filter(b=>b.user_id===CUR.id&&b.completed&&b.difficulty>=4).length>=1},
-  {id:'books_1000pp', name:'1.000 pagine lette',   emoji:'📜',  cat:'Lettura', check:()=>DB.book_sessions.filter(s=>s.user_id===CUR.id).reduce((a,s)=>a+(s.pages||0),0)>=1000},
-  // STUDIO
-  {id:'sessions_5',   name:'5 sessioni studio',    emoji:'📝',  cat:'Studio',  check:()=>DB.sessions.filter(s=>s.user_id===CUR.id).length>=5},
-  {id:'sessions_20',  name:'20 sessioni studio',   emoji:'🎓',  cat:'Studio',  check:()=>DB.sessions.filter(s=>s.user_id===CUR.id).length>=20},
-  {id:'sessions_50',  name:'50 sessioni studio',   emoji:'🏫',  cat:'Studio',  check:()=>DB.sessions.filter(s=>s.user_id===CUR.id).length>=50},
-  {id:'focus_max',    name:'Focus massimo',        emoji:'🎯',  cat:'Studio',  check:()=>DB.sessions.filter(s=>s.user_id===CUR.id&&s.focus_score>=5).length>=5},
-  // SPORT/VITA
-  {id:'gym_3',        name:'3 sessioni palestra',  emoji:'🏋️', cat:'Vita',    check:()=>DB.activities.filter(a=>a.user_id===CUR.id&&a.type==='gym').length>=3},
-  {id:'gym_10',       name:'10 sessioni palestra', emoji:'💪',  cat:'Vita',    check:()=>DB.activities.filter(a=>a.user_id===CUR.id&&a.type==='gym').length>=10},
-  {id:'gym_30',       name:'30 sessioni palestra', emoji:'🦾',  cat:'Vita',    check:()=>DB.activities.filter(a=>a.user_id===CUR.id&&a.type==='gym').length>=30},
-  {id:'run_5',        name:'5 corse',              emoji:'🏃',  cat:'Vita',    check:()=>DB.activities.filter(a=>a.user_id===CUR.id&&a.type==='run').length>=5},
-  {id:'meditate_7',   name:'7 meditazioni',        emoji:'🧘',  cat:'Vita',    check:()=>DB.activities.filter(a=>a.user_id===CUR.id&&a.type==='meditate').length>=7},
-  // SFIDE PVP
-  {id:'pvp_first',    name:'Prima sfida',          emoji:'⚔️',  cat:'Sfide',   check:()=>DB.challenges.filter(c=>c.creator_id===CUR.id||c.joiner_id===CUR.id).length>=1},
-  {id:'pvp_win',      name:'Prima vittoria',       emoji:'🏆',  cat:'Sfide',   check:()=>DB.challenges.filter(c=>c.winner_id===CUR.id).length>=1},
-  {id:'pvp_win5',     name:'5 vittorie',           emoji:'🥇',  cat:'Sfide',   check:()=>DB.challenges.filter(c=>c.winner_id===CUR.id).length>=5},
-  {id:'pvp_win10',    name:'10 vittorie',          emoji:'👹',  cat:'Sfide',   check:()=>DB.challenges.filter(c=>c.winner_id===CUR.id).length>=10},
-  // SOCIAL
-  {id:'first_friend', name:'Primo amico',          emoji:'🤝',  cat:'Social',  check:()=>(getUser(CUR.id)?.friends||[]).length>=1},
-  {id:'friends_5',    name:'5 amici',              emoji:'👥',  cat:'Social',  check:()=>(getUser(CUR.id)?.friends||[]).length>=5},
-  // SPECIALI
-  {id:'all_stats',    name:'Tuttofare',            emoji:'🌐',  cat:'Speciale',check:()=>{const s=getUser(CUR.id)?.stats||{}; return Object.values(s).every(v=>v>=100);}},
-  {id:'night_owl',    name:'Nottambulo',           emoji:'🦉',  cat:'Speciale',check:()=>DB.activities.filter(a=>a.user_id===CUR.id&&new Date(a.date).getHours()>=22).length>=5},
+  {id:'first_quest', name:'Prima quest',       emoji:'⚔️', cat:'Quest',   check:()=>DB.quests.filter(q=>q.user_id===CUR.id&&q.completed).length>=1},
+  {id:'quest_5',     name:'5 quest',            emoji:'🗡️', cat:'Quest',   check:()=>DB.quests.filter(q=>q.user_id===CUR.id&&q.completed).length>=5},
+  {id:'quest_10',    name:'10 quest',           emoji:'🌟', cat:'Quest',   check:()=>DB.quests.filter(q=>q.user_id===CUR.id&&q.completed).length>=10},
+  {id:'quest_25',    name:'25 quest',           emoji:'💫', cat:'Quest',   check:()=>DB.quests.filter(q=>q.user_id===CUR.id&&q.completed).length>=25},
+  {id:'streak_3',    name:'Streak 3 giorni',    emoji:'🔥', cat:'Streak',  check:()=>(getUser(CUR.id)?.streak_days||0)>=3},
+  {id:'streak_7',    name:'Streak 7 giorni',    emoji:'🔥', cat:'Streak',  check:()=>(getUser(CUR.id)?.streak_days||0)>=7},
+  {id:'streak_14',   name:'Streak 2 settimane', emoji:'🌙', cat:'Streak',  check:()=>(getUser(CUR.id)?.streak_days||0)>=14},
+  {id:'streak_30',   name:'Streak 30 giorni',   emoji:'⚡', cat:'Streak',  check:()=>(getUser(CUR.id)?.streak_days||0)>=30},
+  {id:'level_5',     name:'Livello 5',          emoji:'⭐', cat:'Livello', check:()=>(getUser(CUR.id)?.level||0)>=5},
+  {id:'level_10',    name:'Livello 10',         emoji:'🌍', cat:'Livello', check:()=>(getUser(CUR.id)?.level||0)>=10},
+  {id:'xp_1000',     name:'1.000 XP',           emoji:'💎', cat:'XP',      check:()=>(getUser(CUR.id)?.xp_total||0)>=1000},
+  {id:'xp_5000',     name:'5.000 XP',           emoji:'💍', cat:'XP',      check:()=>(getUser(CUR.id)?.xp_total||0)>=5000},
+  {id:'first_book',  name:'Primo libro',        emoji:'📚', cat:'Lettura', check:()=>DB.books.filter(b=>b.user_id===CUR.id&&b.completed).length>=1},
+  {id:'books_3',     name:'3 libri',            emoji:'📖', cat:'Lettura', check:()=>DB.books.filter(b=>b.user_id===CUR.id&&b.completed).length>=3},
+  {id:'gym_3',       name:'3 sessioni palestra', emoji:'🏋️',cat:'Vita',    check:()=>DB.activities.filter(a=>a.user_id===CUR.id&&a.type==='gym').length>=3},
+  {id:'gym_10',      name:'10 sessioni palestra',emoji:'💪', cat:'Vita',    check:()=>DB.activities.filter(a=>a.user_id===CUR.id&&a.type==='gym').length>=10},
+  {id:'pvp_first',   name:'Prima sfida',        emoji:'⚔️', cat:'Sfide',   check:()=>DB.challenges.filter(c=>c.creator_id===CUR.id||c.joiner_id===CUR.id).length>=1},
+  {id:'pvp_win',     name:'Prima vittoria',     emoji:'🏆', cat:'Sfide',   check:()=>DB.challenges.filter(c=>c.winner_id===CUR.id).length>=1},
 ];
 
 function checkTrophies() {
@@ -669,7 +641,7 @@ function checkTrophies() {
   if(newOnes){ saveDB(); syncCUR(u); apiCall('SYNC_USER_DATA',buildUserPayload(u)); }
 }
 
-/* ── 12. ESAMI / CAPITOLI / CONCETTI ── */
+/* ── 13. STUDIO ── */
 let studyTab='exams';
 function switchStudyTab(t) {
   studyTab=t;
@@ -678,6 +650,7 @@ function switchStudyTab(t) {
   );
   renderStudy();
 }
+
 function renderStudy() {
   const c=document.getElementById('study-container');
   if(studyTab==='exams') renderExams(c);
@@ -707,7 +680,7 @@ function renderExams(c) {
       <div class="exam-head" onclick="toggleExamBody('${exam.id}')">
         <div class="exam-icon">${exam.emoji||'📘'}</div>
         <div class="exam-info">
-          <div class="exam-name">${exam.title}</div>
+          <div class="exam-name">${escHtml(exam.title)}</div>
           <div class="exam-date">${exam.exam_date?'📅 '+exam.exam_date+' ('+dlStr+')':''} · Mastery <b style="color:${mpColor}">${mp}%</b></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
@@ -727,7 +700,7 @@ function renderChRow(ch) {
   return `<div class="chapter-row">
     <div class="ch-check ${ch.completed?'done':''}" onclick="toggleChapter('${ch.id}')"></div>
     <div class="ch-info">
-      <div class="ch-name" style="${ch.completed?'text-decoration:line-through;color:var(--text3)':''}">${ch.title}</div>
+      <div class="ch-name" style="${ch.completed?'text-decoration:line-through;color:var(--text3)':''}">${escHtml(ch.title)}</div>
       <div class="ch-concepts">${diffStars(ch.difficulty||2)} · ${done}/${cos.length} concetti</div>
     </div>
     <div class="ch-btns">
@@ -736,7 +709,7 @@ function renderChRow(ch) {
     </div>
   </div>
   <div id="concepts-${ch.id}" style="display:none">
-    ${cos.map(co=>`<div class="concept-row"><div class="concept-check ${co.completed?'done':''}" onclick="toggleConcept('${co.id}')"></div><span class="concept-name ${co.completed?'done':''}">${co.title}</span></div>`).join('')}
+    ${cos.map(co=>`<div class="concept-row"><div class="concept-check ${co.completed?'done':''}" onclick="toggleConcept('${co.id}')"></div><span class="concept-name ${co.completed?'done':''}">${escHtml(co.title)}</span></div>`).join('')}
     ${!cos.length?'<div style="font-size:11px;color:var(--text3);padding:4px 8px">Nessun concetto. Clicca + per aggiungere.</div>':''}
   </div>`;
 }
@@ -751,7 +724,6 @@ async function addExam() {
   DB.exams.push(e); saveDB(); closeModal('modal-add-exam');
   document.getElementById('ex-name').value='';
   renderStudy(); showToast('📘 Esame aggiunto!');
-  await apiCall('ADD_EXAM',{exam:e});
 }
 
 function openAddChapter(examId){ document.getElementById('ch-exam-id').value=examId; document.getElementById('ch-name').value=''; openModal('modal-add-chapter'); }
@@ -761,7 +733,6 @@ async function addChapter() {
   if(!name){showToast('⚠️ Nome capitolo richiesto');return;}
   const ch={id:uid(),exam_id:document.getElementById('ch-exam-id').value,title:name,difficulty:parseInt(document.getElementById('ch-diff').value)||3,completed:false,created_at:ts()};
   DB.chapters.push(ch); saveDB(); closeModal('modal-add-chapter'); renderStudy(); showToast('📚 Capitolo aggiunto!');
-  await apiCall('ADD_CHAPTER',{chapter:ch});
 }
 
 async function toggleChapter(id) {
@@ -769,7 +740,6 @@ async function toggleChapter(id) {
   ch.completed=true; ch.completed_at=ts(); saveDB();
   awardXP(Math.round(80*DIFF_MULT[ch.difficulty||2]),'mente','— Capitolo: '+ch.title);
   checkTrophies(); renderStudy();
-  await apiCall('COMPLETE_CHAPTER',{chapter_id:id,exam_id:ch.exam_id,user_id:CUR.id,completed_at:ch.completed_at});
 }
 
 function openAddConcept(chId){ document.getElementById('co-chapter-id').value=chId; document.getElementById('co-name').value=''; document.getElementById('co-notes').value=''; openModal('modal-add-concept'); }
@@ -779,14 +749,12 @@ async function addConcept() {
   if(!name){showToast('⚠️ Nome concetto richiesto');return;}
   const co={id:uid(),chapter_id:document.getElementById('co-chapter-id').value,title:name,notes:document.getElementById('co-notes').value,completed:false,created_at:ts()};
   DB.concepts.push(co); saveDB(); closeModal('modal-add-concept'); renderStudy(); showToast('🔵 Concetto aggiunto!');
-  await apiCall('ADD_CONCEPT',{concept:co});
 }
 
 async function toggleConcept(id) {
   const co=DB.concepts.find(c=>c.id===id); if(!co||co.completed) return;
   co.completed=true; co.completed_at=ts(); saveDB();
   awardXP(25,'mente','— Concetto: '+co.title); renderStudy();
-  await apiCall('COMPLETE_CONCEPT',{concept_id:id,chapter_id:co.chapter_id,user_id:CUR.id});
 }
 
 function openLogSession(examId){ document.getElementById('ss-exam-id').value=examId; document.getElementById('ss-mins').value=''; document.getElementById('ss-notes').value=''; openModal('modal-log-session'); }
@@ -803,7 +771,6 @@ async function logSession() {
   DB.activities.push({id:uid(),user_id:CUR.id,name:'📝 Studio: '+(exam?.title||'Generico')+' ('+mins+'min)',date:ts(),xp,stat:'mente',type:'study'});
   saveDB(); closeModal('modal-log-session');
   awardXP(xp,'mente','— Sessione '+mins+'min'); checkTrophies(); renderStudy();
-  await apiCall('LOG_SESSION',{session:sess});
 }
 
 function renderSessions(c) {
@@ -812,9 +779,9 @@ function renderSessions(c) {
     <div class="session-row">
       <div class="session-dot"></div>
       <div class="session-info">
-        <div class="session-name">${s.exam_name} — ${s.duration_min}min</div>
+        <div class="session-name">${escHtml(s.exam_name)} — ${s.duration_min}min</div>
         <div class="session-time">${new Date(s.date).toLocaleString('it')} · Focus: ${'⭐'.repeat(s.focus_score)}</div>
-        ${s.notes?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${s.notes}</div>`:''}
+        ${s.notes?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${escHtml(s.notes)}</div>`:''}
       </div>
       <div class="session-xp">+${s.xp} XP</div>
     </div>`).join('')
@@ -839,32 +806,34 @@ function renderCalendar(c) {
   c.innerHTML=html;
 }
 
-/* ── 13. SFIDE PVP ── */
+/* ── 14. SFIDE PVP ── */
 let pvpTab='active', pendingRules=[];
 function switchPvpTab(t) {
   pvpTab=t;
   document.querySelectorAll('#screen-pvp .tab').forEach((b,i)=>b.classList.toggle('active',['active','pending','history'][i]===t));
   renderPvP();
 }
+
 function renderPvP() {
   const myC=DB.challenges.filter(c=>c.creator_id===CUR.id||c.joiner_id===CUR.id);
   const list=pvpTab==='active'?myC.filter(c=>c.status==='active'):pvpTab==='pending'?myC.filter(c=>c.status==='pending'):myC.filter(c=>c.status==='done');
   const c=document.getElementById('pvp-container');
   c.innerHTML=list.length?list.map(ch=>renderChallengeCard(ch)).join(''):`<div class="empty"><div class="empty-emoji">${pvpTab==='done'?'🏆':'⚔️'}</div><div class="empty-text">Nessuna sfida ${pvpTab==='active'?'attiva':pvpTab==='pending'?'in attesa':'conclusa'}.</div></div>`;
 }
+
 function renderChallengeCard(ch) {
   const iWon=ch.winner_id===CUR.id;
   const typeLabel={athletic:'🏋️ Atletica',mental:'🧠 Mentale',mixed:'🎯 Mista'}[ch.type]||ch.type;
   const typeClass={athletic:'ch-type-ath',mental:'ch-type-men',mixed:'ch-type-mix'}[ch.type]||'ch-type-men';
   return `<div class="challenge-card" onclick="viewChallenge('${ch.id}')">
-    <div class="challenge-head"><span class="ch-type-badge ${typeClass}">${typeLabel}</span><span class="challenge-title">${ch.title}</span></div>
-    <div class="challenge-meta">${ch.description||''}<br>${ch.creator_id===CUR.id?'Tu vs avversario':'Sfida di '+ch.creator_username} · Scad. ${ch.deadline||'—'}</div>
+    <div class="challenge-head"><span class="ch-type-badge ${typeClass}">${typeLabel}</span><span class="challenge-title">${escHtml(ch.title)}</span></div>
+    <div class="challenge-meta">${escHtml(ch.description||'')} · Scad. ${ch.deadline||'—'}</div>
     <div class="challenge-footer">
       <span class="challenge-stake">⚡ ${ch.stake} XP</span>
       <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
         ${ch.status==='done'?`<span class="tag ${iWon?'tag-green':'tag-red'}">${iWon?'🏆 Vinta':'❌ Persa'}</span>`:''}
         ${ch.status==='active'?`<button class="btn-sm btn-sm-primary" style="font-size:10px" onclick="event.stopPropagation();openDeclareWinner('${ch.id}')">Dichiara vincitore</button>`:''}
-        <span class="challenge-code" onclick="event.stopPropagation();navigator.clipboard.writeText('${ch.code}').then(()=>showToast('🔁 Copiato!')).catch(()=>showToast('${ch.code}'))">${ch.code}</span>
+        <span class="challenge-code">${ch.code}</span>
       </div>
     </div>
   </div>`;
@@ -876,18 +845,22 @@ function viewChallenge(id) {
   document.getElementById('challenge-detail-content').innerHTML=`
     <div class="modal-handle" style="margin:16px auto 14px"></div>
     <div style="padding:0 22px 6px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="ch-type-badge ch-type-${ch.type}">${typeLabel}</span><span style="font-size:17px;font-weight:800;flex:1">${ch.title}</span></div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:14px">${ch.description||'—'}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="ch-type-badge ch-type-${ch.type}">${typeLabel}</span><span style="font-size:17px;font-weight:800;flex:1">${escHtml(ch.title)}</span></div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px">${escHtml(ch.description||'—')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0">
         <div class="card2"><div style="font-size:18px;font-weight:900;color:var(--gold)">${ch.stake}</div><div style="font-size:10px;color:var(--text3)">XP in palio</div></div>
         <div class="card2"><div style="font-size:14px;font-weight:700">${ch.deadline||'—'}</div><div style="font-size:10px;color:var(--text3)">Scadenza</div></div>
-        <div class="card2"><div style="font-size:14px;font-weight:700">${ch.creator_username}</div><div style="font-size:10px;color:var(--text3)">Creatore</div></div>
-        <div class="card2"><div style="font-size:14px;font-weight:700">${ch.joiner_username||'In attesa...'}</div><div style="font-size:10px;color:var(--text3)">Avversario</div></div>
+        <div class="card2"><div style="font-size:14px;font-weight:700">${escHtml(ch.creator_username||'—')}</div><div style="font-size:10px;color:var(--text3)">Creatore</div></div>
+        <div class="card2"><div style="font-size:14px;font-weight:700">${escHtml(ch.joiner_username||'In attesa...')}</div><div style="font-size:10px;color:var(--text3)">Avversario</div></div>
       </div>
       ${ch.status==='active'?`<button class="btn-sm btn-sm-primary" style="width:100%;margin-bottom:8px" onclick="closeModal('modal-challenge-detail');openDeclareWinner('${ch.id}')">🏆 Dichiara vincitore</button>`:''}
-      <div style="text-align:center"><span class="challenge-code" onclick="navigator.clipboard.writeText('${ch.code}').then(()=>showToast('Copiato!')).catch(()=>showToast('${ch.code}'))">Codice: ${ch.code} — tocca per copiare</span></div>
+      <div style="text-align:center;margin-top:8px"><span class="challenge-code" onclick="copyCode('${ch.code}')">Codice: ${ch.code} — tocca per copiare</span></div>
     </div>`;
   openModal('modal-challenge-detail');
+}
+
+function copyCode(code) {
+  navigator.clipboard.writeText(code).then(()=>showToast('🔁 Codice copiato!')).catch(()=>showToast('Codice: '+code));
 }
 
 function addRule(type) {
@@ -915,8 +888,9 @@ function saveRule() {
 
 function renderPendingRules() {
   const list=document.getElementById('pvp-rules-list'); if(!list) return;
-  list.innerHTML=(pendingRules||[]).map((r,i)=>`<div class="rule-item"><div class="rule-item-type">${r.type}</div><div class="rule-item-value">${r.value}</div><button class="rule-item-remove" onclick="removeRule(${i})">✕</button></div>`).join('');
+  list.innerHTML=(pendingRules||[]).map((r,i)=>`<div class="rule-item"><div class="rule-item-type">${r.type}</div><div class="rule-item-value">${escHtml(r.value)}</div><button class="rule-item-remove" onclick="removeRule(${i})">✕</button></div>`).join('');
 }
+
 function removeRule(i){ pendingRules.splice(i,1); renderPendingRules(); }
 
 async function createChallenge() {
@@ -924,28 +898,20 @@ async function createChallenge() {
   if(!title){showToast('⚠️ Inserisci il titolo');return;}
   const stake=Math.min(20,Math.max(5,parseInt(document.getElementById('pvp-stake').value)||20));
   const code=randCode();
-  const ch={id:uid(),creator_id:CUR.id,creator_username:CUR.username,joiner_id:null,joiner_username:null,type:document.getElementById('pvp-type').value,title,description:document.getElementById('pvp-desc').value,rules:[...(pendingRules||[])],stake,deadline:document.getElementById('pvp-deadline').value,code,replicable:document.getElementById('pvp-rep-toggle').classList.contains('on'),status:'pending',created_at:ts()};
+  const ch={id:uid(),creator_id:CUR.id,creator_username:CUR.username,joiner_id:null,joiner_username:null,type:document.getElementById('pvp-type').value,title,description:document.getElementById('pvp-desc').value,rules:[...(pendingRules||[])],stake,deadline:document.getElementById('pvp-deadline').value,code,status:'pending',created_at:ts()};
   DB.challenges.push(ch); saveDB(); pendingRules=[]; renderPendingRules(); closeModal('modal-create-challenge');
   showToast('⚔️ Sfida creata! Codice: '+code); renderPvP();
-  await apiCall('CREATE_CHALLENGE',{challenge:ch});
 }
 
 async function joinChallenge() {
   const code=document.getElementById('join-code-input').value.trim().toUpperCase();
-  // Cerca prima localmente
   let ch=DB.challenges.find(c=>c.code===code);
-  if(!ch) {
-    // Cerca sul cloud
-    const r=await apiCall('FIND_CHALLENGE',{code});
-    if(r.success&&r.challenge) { ch=r.challenge; DB.challenges.push(ch); saveDB(); }
-  }
-  if(!ch){showToast('⚠️ Codice non trovato');return;}
+  if(!ch){showToast('⚠️ Codice non trovato localmente. Chiedi il codice al creatore.');return;}
   if(ch.creator_id===CUR.id){showToast('⚠️ Non puoi unirti alla tua sfida');return;}
   if(ch.joiner_id){showToast('⚠️ Sfida già occupata');return;}
   ch.joiner_id=CUR.id; ch.joiner_username=CUR.username; ch.status='active';
   saveDB(); document.getElementById('join-code-input').value='';
   showToast('⚔️ Sfida accettata!'); renderPvP();
-  await apiCall('JOIN_CHALLENGE',{challenge_id:ch.id,joiner_id:CUR.id,joiner_username:CUR.username});
 }
 
 function openDeclareWinner(id){ document.getElementById('win-challenge-id').value=id; openModal('modal-declare-winner'); }
@@ -959,24 +925,23 @@ async function declareWinner(who) {
   else { ch.winner_id=(ch.creator_id===CUR.id)?(ch.joiner_id||'opp'):ch.creator_id; }
   saveDB(); closeModal('modal-declare-winner'); closeModal('modal-challenge-detail');
   checkTrophies(); renderPvP();
-  await apiCall('COMPLETE_CHALLENGE',{challenge_id:id,winner_id:ch.winner_id,status:'done'});
 }
 
-/* ── 14. SCHEDA PROFILO (ex Stats) ── */
-let profileTab='me';
-function switchProfileTab(t) {
-  profileTab=t;
-  document.querySelectorAll('#screen-profile .tab').forEach((b,i)=>b.classList.toggle('active',['me','leaderboard','friends'][i]===t));
-  renderProfile();
+/* ── 15. STATS / LEADERBOARD ── */
+let statsTab='stats';
+function switchStatsTab(t) {
+  statsTab=t;
+  document.querySelectorAll('#screen-stats .tab').forEach((b,i)=>b.classList.toggle('active',['stats','leaderboard'][i]===t));
+  renderStats();
 }
 
-function renderProfile() {
-  if(profileTab==='me') renderMyProfile();
-  else if(profileTab==='leaderboard') renderLeaderboard();
-  else renderFriendsTab();
+function renderStats() {
+  if(statsTab==='stats') renderMyStats();
+  else renderLeaderboard();
 }
 
-function renderMyProfile() {
+function renderMyStats() {
+  const container=document.getElementById('stats-container');
   const u=getUser(CUR.id)||CUR;
   const stats=u.stats||{};
   const maxVal=Math.max(1,...Object.values(stats).map(Number));
@@ -986,14 +951,10 @@ function renderMyProfile() {
   const totalBooks=DB.books.filter(b=>b.user_id===CUR.id&&b.completed).length;
 
   let html=`<div style="padding:0 20px 20px">
-    <!-- Avatar -->
     <div style="display:flex;align-items:center;gap:16px;padding:16px 0">
-      <div class="profile-avatar-big" id="profile-avatar-big" onclick="openAvatarUpload()">
-        ${u.avatar?`<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:`<span style="font-size:32px;font-weight:900">${u.username[0].toUpperCase()}</span>`}
-        <div class="avatar-edit-overlay">📷</div>
-      </div>
+      <div class="level-badge" style="width:60px;height:60px;font-size:22px">${u.level||1}</div>
       <div style="flex:1">
-        <div style="font-size:20px;font-weight:900">${u.username}</div>
+        <div style="font-size:20px;font-weight:900">${escHtml(u.username)}</div>
         <div style="font-size:12px;color:var(--accent2)">${rankTitle(u.level||1)} · Lv.${u.level||1}</div>
         <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
           <span class="tag tag-xp">⚡ ${(u.xp_total||0).toLocaleString()} XP</span>
@@ -1001,32 +962,25 @@ function renderMyProfile() {
         </div>
       </div>
     </div>
-    <!-- Stats veloci -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px">
       <div class="card2" style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">${wins}</div><div style="font-size:10px;color:var(--text3)">Vittorie</div></div>
       <div class="card2" style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--gold)">${totalQuests}</div><div style="font-size:10px;color:var(--text3)">Quest</div></div>
       <div class="card2" style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--cyan)">${totalBooks}</div><div style="font-size:10px;color:var(--text3)">Libri</div></div>
     </div>
-    <!-- Radar -->
     <div style="text-align:center;margin-bottom:8px"><canvas id="stats-canvas" width="240" height="240"></canvas></div>
-    <!-- Stat bars -->
     <div style="margin-bottom:14px">`;
   Object.entries(STAT_COLORS).forEach(([k,col])=>{
     const v=stats[k]||0; const p=Math.round((v/maxVal)*100);
     html+=`<div class="stat-bar-row"><div class="stat-bar-label" style="color:${col}">${k}</div><div class="stat-bar-bg"><div class="stat-bar-fg" style="width:${p}%;background:${col}"></div></div><div class="stat-bar-val" style="color:${col}">${v}</div></div>`;
   });
   html+=`</div>
-    <!-- Profilo pubblico toggle -->
     <div class="visibility-toggle" style="margin-bottom:12px">
       <div class="toggle-track ${u.public_profile?'on':''}" id="profile-vis-toggle" onclick="toggleProfileVis()"><div class="toggle-knob"></div></div>
       <span class="toggle-label" style="font-size:12px">Visibile in leaderboard</span>
     </div>
-    <!-- Privacy -->
-    <button class="btn-sm btn-sm-ghost" style="width:100%;margin-bottom:8px" onclick="openPrivacySettings()">🔒 Impostazioni privacy</button>
-    <!-- Trofei -->
+    <button class="btn-sm btn-sm-ghost" style="width:100%;margin-bottom:12px" onclick="openPrivacySettings()">🔒 Impostazioni privacy</button>
     <div class="section-hd" style="margin-bottom:8px"><span class="section-title">Trofei (${trophies.length}/${TROPHY_DEFS.length})</span></div>`;
 
-  // Raggruppa per categoria
   const cats=[...new Set(TROPHY_DEFS.map(d=>d.cat))];
   cats.forEach(cat=>{
     const catDefs=TROPHY_DEFS.filter(d=>d.cat===cat);
@@ -1044,167 +998,35 @@ function renderMyProfile() {
   });
 
   html+=`<button class="btn-sm btn-sm-red" style="width:100%;margin-top:16px;margin-bottom:24px" onclick="doLogout()">🚪 Esci dall'account</button></div>`;
-  document.getElementById('profile-container').innerHTML=html;
+  container.innerHTML=html;
   setTimeout(()=>drawRadar(stats,maxVal),50);
 }
 
 async function renderLeaderboard() {
-  const container=document.getElementById('profile-container');
+  const container=document.getElementById('stats-container');
   container.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Caricamento leaderboard...</div>';
   let users=[];
   try {
     const result=await apiCall('GET_LEADERBOARD',{});
     if(result.success) users=result.leaderboard||[];
   } catch(e) {
-    users=DB.users.filter(u=>u.public_profile).map(u=>({id:u.id,username:u.username,xp_total:u.xp_total||0,level:u.level||1,streak_days:u.streak_days||0,avatar:u.avatar||''})).sort((a,b)=>b.xp_total-a.xp_total);
+    users=DB.users.filter(u=>u.public_profile).map(u=>({id:u.id,username:u.username,xp_total:u.xp_total||0,level:u.level||1,streak_days:u.streak_days||0})).sort((a,b)=>b.xp_total-a.xp_total);
     showToast('⚠️ Leaderboard offline');
   }
-  if(!users.length){ container.innerHTML='<div class="empty"><div class="empty-emoji">🏆</div><div class="empty-text">Sii il primo in leaderboard!<br><small style="color:var(--text3)">Attiva "Visibile in leaderboard" nella tab Me</small></div></div>'; return; }
+  if(!users.length){
+    container.innerHTML='<div class="empty"><div class="empty-emoji">🏆</div><div class="empty-text">Sii il primo in leaderboard!<br><small style="color:var(--text3)">Attiva "Visibile in leaderboard"</small></div></div>';
+    return;
+  }
   const rankCls=['gold','silver','bronze'];
   container.innerHTML='<div style="padding:0 20px 20px">'+users.map((u,i)=>{
     const isMe=CUR&&u.id===CUR.id;
-    const avatarHtml=u.avatar?`<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:u.username[0].toUpperCase();
-    return `<div class="lb-row" style="${isMe?'border-color:var(--accent)':''}" onclick="viewPublicProfile('${u.id}')">
+    return `<div class="lb-row" style="${isMe?'border-color:var(--accent)':''}">
       <div class="lb-rank ${rankCls[i]||''}">${i+1}</div>
-      <div class="lb-avatar">${avatarHtml}</div>
-      <div class="lb-info"><div class="lb-name">${u.username}${isMe?' 👈':''}</div><div class="lb-xp">${(u.xp_total||0).toLocaleString()} XP · ${u.streak_days||0}🔥 streak</div></div>
+      <div class="lb-avatar">${u.username[0].toUpperCase()}</div>
+      <div class="lb-info"><div class="lb-name">${escHtml(u.username)}${isMe?' 👈':''}</div><div class="lb-xp">${(u.xp_total||0).toLocaleString()} XP · ${u.streak_days||0}🔥 streak</div></div>
       <div class="lb-level">Lv.${u.level||1}</div>
     </div>`;
   }).join('')+'</div>';
-}
-
-function renderFriendsTab() {
-  const container=document.getElementById('profile-container');
-  const u=getUser(CUR.id);
-  const friends=u?.friends||[];
-  const names=u?.friend_names||{};
-  container.innerHTML=`<div style="padding:0 20px 20px">
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <input class="sm" id="user-search-input" placeholder="Cerca username..." style="flex:1;margin:0" onkeydown="if(event.key==='Enter')searchUser()">
-      <button class="btn-sm btn-sm-primary" onclick="searchUser()">Cerca</button>
-    </div>
-    <div id="user-search-results"></div>
-    <div class="section-hd" style="margin-top:16px;margin-bottom:8px"><span class="section-title">I tuoi amici (${friends.length})</span></div>
-    <div id="friends-list-tab">
-    ${friends.length ? friends.map(id=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--bg3)">
-        <div class="lb-avatar">${(names[id]||'?')[0].toUpperCase()}</div>
-        <div style="flex:1;font-weight:600;font-size:13px">${names[id]||id}</div>
-        <button class="btn-sm btn-sm-ghost" style="font-size:11px" onclick="viewPublicProfile('${id}')">👁️ Profilo</button>
-        <button class="btn-sm btn-sm-red" style="font-size:11px" onclick="removeFriend('${id}')">✕</button>
-      </div>`).join('')
-    :'<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessun amico ancora. Cerca per username!</div>'}
-    </div>
-  </div>`;
-}
-
-async function searchUser() {
-  const query=(document.getElementById('user-search-input')?.value||'').trim();
-  if(query.length<2){showToast('⚠️ Inserisci almeno 2 caratteri');return;}
-  const resultEl=document.getElementById('user-search-results');
-  if(!resultEl) return;
-  resultEl.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px 0">Ricerca in corso...</div>';
-  const data=await apiCall('SEARCH_USER',{query});
-  if(!data.success||!data.users||!data.users.length){ resultEl.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessun utente trovato.</div>'; return; }
-  const myUser=getUser(CUR.id); const friends=myUser?.friends||[];
-  resultEl.innerHTML=data.users.map(found=>{
-    const isFriend=friends.includes(found.id); const isMe=found.id===CUR.id;
-    const avHtml=found.avatar?`<img src="${found.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:found.username[0].toUpperCase();
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bg3)">
-      <div class="lb-avatar">${avHtml}</div>
-      <div style="flex:1"><div style="font-weight:700;font-size:14px">${found.username}</div><div style="font-size:11px;color:var(--text3)">${rankTitle(found.level||1)} · Lv.${found.level||1} · ${(found.xp_total||0).toLocaleString()} XP</div></div>
-      ${isMe?'<span style="font-size:11px;color:var(--text3)">sei tu</span>':`
-        <button class="btn-sm ${isFriend?'btn-sm-ghost':'btn-sm-primary'}" style="font-size:11px" onclick="${isFriend?`removeFriend('${found.id}')`:`addFriend('${found.id}','${found.username}')`}">${isFriend?'✓ Amico':'+ Aggiungi'}</button>
-        <button class="btn-sm btn-sm-ghost" style="font-size:11px" onclick="viewPublicProfile('${found.id}')">👁️</button>`}
-    </div>`;
-  }).join('');
-}
-
-async function addFriend(friendId,friendUsername) {
-  const u=getUser(CUR.id); if(!u) return;
-  if(!u.friends) u.friends=[]; if(!u.friend_names) u.friend_names={};
-  if(u.friends.includes(friendId)){showToast('Già nei tuoi amici!');return;}
-  u.friends.push(friendId); u.friend_names[friendId]=friendUsername;
-  saveDB(); syncCUR(u);
-  showToast('✅ '+friendUsername+' aggiunto agli amici!');
-  renderProfile();
-  await apiCall('SYNC_USER_DATA',buildUserPayload(u));
-  checkTrophies();
-}
-
-async function removeFriend(friendId) {
-  const u=getUser(CUR.id); if(!u||!u.friends) return;
-  u.friends=u.friends.filter(id=>id!==friendId);
-  if(u.friend_names) delete u.friend_names[friendId];
-  saveDB(); syncCUR(u); renderProfile();
-  await apiCall('SYNC_USER_DATA',buildUserPayload(u));
-}
-
-async function viewPublicProfile(userId) {
-  let u=DB.users.find(x=>x.id===userId);
-  if(!u) {
-    const data=await apiCall('GET_FULL_USER_DATA',{user_id:userId});
-    if(data.success&&data.user) {
-      u=data.user;
-      if(!DB.users.find(x=>x.id===u.id)) DB.users.push(u);
-      if(data.quests) data.quests.forEach(q=>{if(!DB.quests.find(x=>x.id===q.id)) DB.quests.push(q);});
-      saveDB();
-    }
-  }
-  if(!u){showToast('Utente non trovato.');return;}
-  openViewProfile(u);
-}
-
-function openViewProfile(u) {
-  const isMe=u.id===CUR.id;
-  const priv=u.privacy||{};
-  const myUser=getUser(CUR.id);
-  const isFriend=(myUser?.friends||[]).includes(u.id);
-  const wins=DB.challenges.filter(c=>c.winner_id===u.id).length;
-  const visQ=DB.quests.filter(q=>q.user_id===u.id&&q.completed);
-  const visB=DB.books.filter(b=>b.user_id===u.id&&b.completed);
-  const avHtml=u.avatar?`<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:u.username[0].toUpperCase();
-  let html=`<div class="profile-header">
-    <div class="profile-avatar" style="overflow:hidden">${avHtml}</div>
-    <div class="profile-username">${u.username}</div>
-    <div class="profile-rank">${rankTitle(u.level||1)} · Lv.${u.level||1}</div>
-    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-      ${priv.show_xp!==false?`<span class="tag tag-xp">⚡ ${(u.xp_total||0).toLocaleString()} XP</span>`:''}
-      ${priv.show_streak!==false?`<span class="streak-badge">🔥 ${u.streak_days||0} gg</span>`:''}
-      <span class="tag tag-green">🏆 ${wins} vittorie</span>
-    </div>
-    ${!isMe?`<div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn-sm ${isFriend?'btn-sm-ghost':'btn-sm-primary'}" style="flex:1" onclick="${isFriend?`removeFriend('${u.id}');closeModal('modal-profile')`:`addFriend('${u.id}','${u.username}')`}">${isFriend?'✓ Amico':'+ Aggiungi amico'}</button>
-      <button class="btn-sm btn-sm-red" style="flex:1" onclick="openReportUser('${u.id}','${u.username}')">🚩 Segnala</button>
-    </div>`:''}
-  </div>
-  <div style="padding:14px 20px">`;
-  if(priv.show_stats!==false) {
-    const stats=u.stats||{}; const maxV=Math.max(1,...Object.values(stats).map(Number));
-    html+=`<div class="section-hd"><span class="section-title">Statistiche</span></div><div style="margin-bottom:14px">`;
-    Object.entries(STAT_COLORS).forEach(([k,col])=>{
-      const v=stats[k]||0; const p=Math.round((v/maxV)*100);
-      html+=`<div class="stat-bar-row"><div class="stat-bar-label" style="color:${col}">${k}</div><div class="stat-bar-bg"><div class="stat-bar-fg" style="width:${p}%;background:${col}"></div></div><div class="stat-bar-val" style="color:${col}">${v}</div></div>`;
-    });
-    html+='</div>';
-  }
-  if(priv.show_trophies!==false&&(u.trophies||[]).length) {
-    html+=`<div class="section-hd"><span class="section-title">Trofei (${u.trophies.length})</span></div><div class="trophy-grid" style="padding:0;margin-bottom:14px">`;
-    u.trophies.forEach(t=>{ const def=TROPHY_DEFS.find(d=>d.id===t.id); if(!def) return; html+=`<div class="trophy-item"><div class="trophy-emoji">${def.emoji}</div><div class="trophy-name">${def.name}</div></div>`; });
-    html+='</div>';
-  }
-  if(priv.show_books!==false&&visB.length) {
-    html+=`<div class="section-hd"><span class="section-title">Libri (${visB.length})</span></div>`;
-    visB.slice(0,6).forEach(b=>{ html+=`<div class="session-row"><div class="session-dot" style="background:var(--orange)"></div><div class="session-info"><div class="session-name">${b.emoji||'📖'} ${b.title}</div><div class="session-time">${b.author||''} · ${diffStars(b.difficulty)}</div></div></div>`; });
-  }
-  if(priv.show_quests!==false&&visQ.length) {
-    html+=`<div class="section-hd" style="margin-top:10px"><span class="section-title">Quest completate (${visQ.length})</span></div>`;
-    visQ.slice(0,8).forEach(q=>{ const d=q.completed_at?new Date(q.completed_at).toLocaleDateString('it'):''; html+=`<div class="session-row"><div class="session-dot"></div><div class="session-info"><div class="session-name">${q.name}</div><div class="session-time">${q.category} · ${q.xp_base} XP${d?' · '+d:''}</div></div></div>`; });
-    if(visQ.length>8) html+=`<div style="font-size:11px;color:var(--text3);padding:4px 0">...e altre ${visQ.length-8} quest</div>`;
-  }
-  html+='</div>';
-  document.getElementById('profile-content').innerHTML=html;
-  openModal('modal-profile');
 }
 
 function toggleProfileVis() {
@@ -1242,42 +1064,6 @@ function drawRadar(stats,maxVal) {
   }
 }
 
-/* ── 15. AVATAR ── */
-function openAvatarUpload() {
-  document.getElementById('avatar-file-input').click();
-}
-
-async function handleAvatarUpload(input) {
-  const file=input.files[0]; if(!file) return;
-  if(file.size>2*1024*1024){showToast('⚠️ Immagine troppo grande (max 2MB)');return;}
-  const reader=new FileReader();
-  reader.onload=async(e)=>{
-    const dataUrl=e.target.result;
-    // Comprimi
-    const compressed=await compressImage(dataUrl,200,200);
-    const u=getUser(CUR.id); if(!u) return;
-    u.avatar=compressed; saveDB(); syncCUR(u);
-    updateDashboard(); renderMyProfile();
-    showToast('📷 Avatar aggiornato!');
-    await apiCall('SYNC_USER_DATA',buildUserPayload(u));
-  };
-  reader.readAsDataURL(file);
-  input.value='';
-}
-
-function compressImage(dataUrl,maxW,maxH) {
-  return new Promise(resolve=>{
-    const img=new Image(); img.onload=()=>{
-      const canvas=document.createElement('canvas');
-      let w=img.width, h=img.height;
-      if(w>maxW||h>maxH) { if(w/h>maxW/maxH){h=Math.round(h*maxW/w);w=maxW;}else{w=Math.round(w*maxH/h);h=maxH;} }
-      canvas.width=w; canvas.height=h;
-      canvas.getContext('2d').drawImage(img,0,0,w,h);
-      resolve(canvas.toDataURL('image/jpeg',0.7));
-    }; img.src=dataUrl;
-  });
-}
-
 /* ── 16. PRIVACY ── */
 function openPrivacySettings() {
   const u=getUser(CUR.id); const p=u?.privacy||{};
@@ -1302,29 +1088,61 @@ async function savePrivacy() {
   await apiCall('SYNC_USER_DATA',buildUserPayload(u));
 }
 
-function openReportUser(userId,username) {
-  const content=document.getElementById('report-content'); if(!content) return;
-  content.innerHTML=`<div class="modal-title">🚩 Segnala utente</div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Stai segnalando: <b>${username}</b></p>
-    <label class="input-label">MOTIVO</label>
-    <select class="sm" id="report-reason"><option value="xp_farm">💰 Farming XP</option><option value="challenge_abuse">⚔️ Abuso sfide</option><option value="fake_quests">📋 Quest false</option><option value="other">Altro</option></select>
-    <label class="input-label" style="margin-top:10px">DETTAGLI (opz.)</label>
-    <textarea class="sm" id="report-notes" style="height:70px" placeholder="Descrivi..."></textarea>
-    <div class="btn-row" style="margin-top:12px">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-report')">Annulla</button>
-      <button class="btn-sm btn-sm-red" style="flex:2" onclick="submitReport('${userId}','${username}')">🚩 Segnala</button>
+/* ── 17. CERCA UTENTI / AMICI ── */
+function renderFriendsList() {
+  const u=getUser(CUR.id);
+  const friends=u?.friends||[];
+  const names=u?.friend_names||{};
+  const el=document.getElementById('friends-list'); if(!el) return;
+  el.innerHTML=friends.length ? friends.map(id=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--bg3)">
+      <div class="lb-avatar">${(names[id]||'?')[0].toUpperCase()}</div>
+      <div style="flex:1;font-weight:600;font-size:13px">${escHtml(names[id]||id)}</div>
+      <button class="btn-sm btn-sm-red" style="font-size:11px" onclick="removeFriend('${id}')">✕</button>
+    </div>`).join('')
+  : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessun amico ancora.</div>';
+}
+
+async function searchUser() {
+  const query=(document.getElementById('user-search-input')?.value||'').trim();
+  if(query.length<2){showToast('⚠️ Inserisci almeno 2 caratteri');return;}
+  const resultEl=document.getElementById('user-search-results');
+  if(!resultEl) return;
+  resultEl.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px 0">Ricerca in corso...</div>';
+  // Cerca localmente in DB (fallback utile quando non c'è endpoint cloud)
+  const localMatches=DB.users.filter(u=>u.id!==CUR.id&&u.username.toLowerCase().includes(query.toLowerCase()));
+  if(!localMatches.length){ resultEl.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessun utente trovato.</div>'; return; }
+  const myUser=getUser(CUR.id); const friends=myUser?.friends||[];
+  resultEl.innerHTML=localMatches.map(found=>{
+    const isFriend=friends.includes(found.id);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bg3)">
+      <div class="lb-avatar">${found.username[0].toUpperCase()}</div>
+      <div style="flex:1"><div style="font-weight:700;font-size:14px">${escHtml(found.username)}</div><div style="font-size:11px;color:var(--text3)">${rankTitle(found.level||1)} · Lv.${found.level||1} · ${(found.xp_total||0).toLocaleString()} XP</div></div>
+      <button class="btn-sm ${isFriend?'btn-sm-ghost':'btn-sm-primary'}" style="font-size:11px" onclick="${isFriend?`removeFriend('${found.id}')`:`addFriend('${found.id}','${found.username}')`}">${isFriend?'✓ Amico':'+ Aggiungi'}</button>
     </div>`;
-  openModal('modal-report');
+  }).join('');
 }
 
-async function submitReport(targetId,targetUsername) {
-  const reason=document.getElementById('report-reason')?.value||'other';
-  const notes=document.getElementById('report-notes')?.value||'';
-  await apiCall('SUBMIT_REPORT',{reporter_id:CUR.id,reporter_username:CUR.username,target_id:targetId,target_username:targetUsername,reason,notes,reported_at:new Date().toISOString()});
-  closeModal('modal-report'); showToast('🚩 Segnalazione inviata. Grazie!');
+async function addFriend(friendId,friendUsername) {
+  const u=getUser(CUR.id); if(!u) return;
+  if(!u.friends) u.friends=[]; if(!u.friend_names) u.friend_names={};
+  if(u.friends.includes(friendId)){showToast('Già nei tuoi amici!');return;}
+  u.friends.push(friendId); u.friend_names[friendId]=friendUsername;
+  saveDB(); syncCUR(u);
+  showToast('✅ '+friendUsername+' aggiunto agli amici!');
+  checkTrophies();
+  await apiCall('SYNC_USER_DATA',buildUserPayload(u));
 }
 
-/* ── 17. MODALI ── */
+async function removeFriend(friendId) {
+  const u=getUser(CUR.id); if(!u||!u.friends) return;
+  u.friends=u.friends.filter(id=>id!==friendId);
+  if(u.friend_names) delete u.friend_names[friendId];
+  saveDB(); syncCUR(u);
+  await apiCall('SYNC_USER_DATA',buildUserPayload(u));
+}
+
+/* ── 18. MODALI ── */
 function openModal(id){ document.getElementById(id)?.classList.add('open'); }
 function closeModal(id){ document.getElementById(id)?.classList.remove('open'); }
 
@@ -1344,14 +1162,14 @@ async function doResetPin() {
 
 function doLogout() {
   if(!confirm('Vuoi davvero uscire dall\'account?')) return;
-  CUR=null; localStorage.removeItem('lq_cur_v3'); localStorage.removeItem('lifequest_user');
+  CUR=null; localStorage.removeItem('lq_cur_v4'); localStorage.removeItem('lq_cur_v3');
   document.getElementById('app').style.display='none';
   document.getElementById('auth-screen').style.display='';
   document.getElementById('l-user').value=''; document.getElementById('l-pass').value='';
   document.getElementById('auth-error').textContent=''; showToast('👋 Logout effettuato');
 }
 
-/* ── 18. AVVIO ── */
+/* ── 19. AVVIO ── */
 function bootApp() {
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='flex';
@@ -1360,25 +1178,26 @@ function bootApp() {
   pendingRules=[]; renderPendingRules();
 }
 
-window.addEventListener('load', async()=>{
+window.addEventListener('load', ()=>{
+  // Migrazione: controlla anche vecchia chiave sesione
+  if(!CUR) {
+    try { CUR = JSON.parse(localStorage.getItem('lq_cur_v3')||'null'); } catch(e){}
+    if(CUR) localStorage.setItem('lq_cur_v4', JSON.stringify(CUR));
+  }
   if(CUR) {
-    // Recupera utente dal DB locale, o usa CUR come fallback se il DB è stato svuotato
     let u=getUser(CUR.id);
-    if(!u) {
-      u = CUR;
-      DB.users.push(u);
-      saveDB();
-    }
+    if(!u) { u=CUR; DB.users.push(u); saveDB(); }
     syncCUR(u); bootApp();
-    showLoading('Sincronizzazione dati dal cloud...');
-    try {
-      const fullData=await apiCall('GET_FULL_USER_DATA',{user_id:u.id});
-      if(fullData.success) {
-        rebuildLocalFromCloud(u,fullData);
-        const updated=getUser(u.id);
-        if(updated){ syncCUR(updated); }
+    // Sync silenzioso XP dal cloud
+    apiCall('GET_USER_DATA',{user_id:u.id}).then(r=>{
+      if(r.success&&r.user) {
+        const cu=r.user;
+        u.xp_total=Math.max(u.xp_total||0, cu.xp_total||0);
+        u.level=Math.max(u.level||1, cu.level||1);
+        u.streak_days=Math.max(u.streak_days||0, cu.streak_days||0);
+        if(cu.stats) Object.keys(cu.stats).forEach(k=>{ u.stats[k]=Math.max(u.stats[k]||0,cu.stats[k]||0); });
+        saveDB(); syncCUR(u); updateDashboard();
       }
-    } catch(e){ console.warn('Auto-sync failed',e); }
-    hideLoading(); updateDashboard(); renderHome();
+    }).catch(()=>{});
   }
 });
