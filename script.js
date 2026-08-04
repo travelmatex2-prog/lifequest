@@ -2,7 +2,7 @@
    LIFEQUEST v2.0 — script.js CORRETTO E COMPLETATO
    ============================================================ */
 
-const API_URL = "https://script.google.com/macros/s/YOUR_GAS_WEB_APP_URL_HERE/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbz1dG4i5sxBptSc6VKewCcf9rzzhXntkDFwBa_CxYu18RKs9LxN6QnNQC3OWmPIrycBXw/exec";
 const DB_KEY  = 'lq_db_v5';
 
 const RANK_TITLES = ['Novizio','Apprendista','Studioso','Veterano','Esperto','Maestro','Gran Maestro','Leggenda','Semidio','Dio degli Eroi'];
