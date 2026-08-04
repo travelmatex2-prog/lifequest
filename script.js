@@ -3,7 +3,7 @@
    LIFEQUEST v2.0 — script.js  COMPLETO
    ============================================================ */
 
-const API_URL = "INSERISCI_QUI_IL_TUO_EXEC_URL";
+const API_URL = "1pFxMJ9-TdXsltMfiVF5_ByWRCEOsI8fS";
 const DB_KEY  = 'lq_db_v5';
 
 const RANK_TITLES = ['Novizio','Apprendista','Studioso','Veterano','Esperto','Maestro','Gran Maestro','Leggenda','Semidio','Dio degli Eroi'];
