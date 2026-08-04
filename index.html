@@ -222,6 +222,35 @@
   </div>
 </div>
 
+<!-- EDIT QUEST -->
+<div class="modal-overlay" id="modal-edit-quest" onclick="if(event.target===this)closeModal('modal-edit-quest')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Modifica Quest</div>
+    <input type="hidden" id="eq-id">
+    <label class="input-label">NOME</label>
+    <input class="sm" id="eq-name" placeholder="Nome quest" style="margin-bottom:10px">
+    <label class="input-label">CATEGORIA</label>
+    <select class="sm" id="eq-cat" style="margin-bottom:10px">
+      <option value="mente">🧠 Mente</option><option value="corpo">💪 Corpo</option>
+      <option value="cultura">📚 Cultura</option><option value="sociale">🤝 Sociale</option>
+      <option value="produttività">✅ Produttività</option><option value="sfide">⚔️ Sfide</option>
+      <option value="altro">⭐ Altro</option>
+    </select>
+    <label class="input-label">DIFFICOLTÀ</label>
+    <select class="sm" id="eq-diff" style="margin-bottom:10px">
+      <option value="1">⭐ Facile</option><option value="2">⭐⭐ Normale</option>
+      <option value="3">⭐⭐⭐ Difficile</option><option value="4">⭐⭐⭐⭐ Molto difficile</option>
+    </select>
+    <label class="input-label">NOTE</label>
+    <textarea class="sm" id="eq-notes" placeholder="Dettagli..." style="margin-bottom:10px"></textarea>
+    <div class="btn-row">
+      <button class="btn-sm btn-sm-red" style="flex:1" onclick="deleteQuestFromModal()">Elimina</button>
+      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="updateQuest()">Salva</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD BOOK -->
 <div class="modal-overlay" id="modal-add-book" onclick="if(event.target===this)closeModal('modal-add-book')">
   <div class="modal-sheet">
