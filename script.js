@@ -8,7 +8,7 @@
    ============================================================ */
 
 /* ── COSTANTI ── */
-const API_URL = "https://script.google.com/macros/s/AKfycbyp7uKrXx91u8obCjNvP9hLguG2qIa8OsmJTdqCsAfRCNp7dNBq_r49are-DhPKglBNjA/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwmeYuNmAo9UMbLPbQekmiWJcta1obFm74JEj8ojsCRcVzHrWyGso86RLqsOBb0aT1z/exec";
 const DB_KEY  = 'lq_db_v5';
 
 const RANK_TITLES = ['Novizio','Apprendista','Studioso','Veterano','Esperto','Maestro','Gran Maestro','Leggenda','Semidio','Dio degli Eroi'];
