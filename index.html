@@ -73,9 +73,18 @@
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <span class="section-title">Feed</span>
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:11px;color:var(--text3)" id="feed-switch-label">Amici</span>
+
+
+
+
+        
+       <span style="font-size:11px;color:var(--text3)" id="feed-switch-label">Seguiti</span>
         <div class="toggle-track" id="feed-switch-track" onclick="toggleFeedMode()"><div class="toggle-knob"></div></div>
         <span style="font-size:11px;color:var(--text3)">Tutti</span>
+
+
+
+        
       </div>
     </div>
     <div id="feed-list"></div>
@@ -84,10 +93,20 @@
 
 <!-- QUEST -->
 <div id="screen-quest" class="screen">
+
+
+
+  
   <div class="screen-header">
     <div class="screen-title">⚔️ <span>Quest</span></div>
     <button class="btn-sm btn-sm-primary" onclick="openAddQuestModal()">+ Quest</button>
   </div>
+
+
+
+
+
+  
   <div class="tabs">
     <button class="tab active" onclick="switchQuestTab('todo')">To-Do</button>
     <button class="tab" onclick="switchQuestTab('active')">Obiettivi</button>
@@ -148,7 +167,7 @@
 <!-- AMICI -->
 <div id="screen-friends" class="screen">
   <div class="screen-header">
-    <div class="screen-title">👥 <span>Amici</span></div>
+    <div class="screen-title">👥 <span>Social</span></div>
   </div>
   <div id="friends-container"></div>
 </div>
@@ -185,9 +204,15 @@
   <button class="nav-btn" id="nav-pvp" onclick="gotoTab('pvp')">
     <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>Sfide
   </button>
-  <button class="nav-btn" id="nav-friends" onclick="gotoTab('friends')">
-    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Amici
+
+
+  
+ <button class="nav-btn" id="nav-friends" onclick="gotoTab('friends')">
+    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Social
   </button>
+
+
+  
   <button class="nav-btn" id="nav-stats" onclick="gotoTab('stats')">
     <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Profilo
   </button>
