@@ -151,8 +151,9 @@ function buildUserPayload(u){
     level: u.level || 1, streak_days: u.streak_days || 0,
     last_active: u.last_active || today(), public_profile: !!u.public_profile,
     stats: u.stats || {}, languages: u.languages || [],
-    avatar: u.avatar || '', privacy: u.privacy || {},
-    trophies: u.trophies || [], following: u.following || [],
+    avatar_url: u.avatar || '', privacy: u.privacy || {},
+    trophies: u.trophies || [],
+    following: u.following || [],
     followers: u.followers || {}
   };
 }
@@ -225,8 +226,7 @@ async function doRegister(){
   err.textContent='Registrazione in corso...';
   const result=await apiCall('REGISTER_USER',{username:user,password_hash,pin_hash});
   if(result.success){
-    const u={id:result.user_id,username:user,password_hash,pin_hash,xp_total:0,level:1,streak_days:0,last_active:today(),public_profile:true,avatar:'',languages:[],stats:{mente:0,corpo:0,cultura:0,sociale:0,'produttivita':0,sfide:0},trophies:[],privacy:{},friends:[],friend_names:{}};
-    DB.users.push(u);saveDB();syncCUR(u);bootApp();
+const u={id:result.user_id,username:user,password_hash,pin_hash,xp_total:0,level:1,streak_days:0,last_active:today(),public_profile:true,avatar:'',languages:[],stats:{mente:0,corpo:0,cultura:0,sociale:0,'produttivita':0,sfide:0},trophies:[],privacy:{},following:[],followers:{}};    DB.users.push(u);saveDB();syncCUR(u);bootApp();
   }else err.textContent=result.message||'Errore di registrazione';
 }
 
@@ -247,13 +247,21 @@ async function doLogin(){
         cu.xp_total=Math.max(local.xp_total||0,cu.xp_total||0);
         cu.level=Math.max(local.level||1,cu.level||1);
         cu.streak_days=Math.max(local.streak_days||0,cu.streak_days||0);
-        cu.trophies=local.trophies||[];cu.privacy=local.privacy||{};
-        cu.friends=local.friends||[];cu.friend_names=local.friend_names||{};
+
+
+        
+         cu.trophies=local.trophies||[];cu.privacy=local.privacy||{};
+        // [PATCH V3] Usa following/followers dal cloud (più aggiornato), fallback al locale
+        cu.following = (cu.following && cu.following.length) ? cu.following : (local.following||[]);
+        cu.followers = (cu.followers && Object.keys(cu.followers).length) ? cu.followers : (local.followers||{});
         cu.avatar=local.avatar||cu.avatar||''; cu.languages=cu.languages?.length?cu.languages:(local.languages||[]);
+
+
+        
         if(cu.stats)Object.keys(local.stats||{}).forEach(k=>{cu.stats[k]=Math.max(cu.stats[k]||0,local.stats[k]||0);});
         DB.users[DB.users.indexOf(local)]=cu;
       }else{
-        cu.trophies=[];cu.privacy={};cu.friends=[];cu.friend_names={};
+        cu.trophies=[];cu.privacy={};cu.following=cu.following||[];cu.followers=cu.followers||{};
         cu.avatar=cu.avatar||''; cu.languages=cu.languages||[];
         DB.users.push(cu);
       }
@@ -294,41 +302,91 @@ function updateDashboard(){
   ['mente','corpo','cultura','sociale','sfide'].forEach(k=>{const el=document.getElementById('ds-'+k);if(el)el.textContent=s[k]||0;});
 }
 
-let feedMode='friends';
+
+
 function renderHome(){
   updateDashboard();
   document.getElementById('motiv-text').textContent=MOTIVS[new Date().getDay()%MOTIVS.length];
-  renderFeed();
+  loadAndRenderFeed();
 }
+
+
+
+let feedMode='following';
+let _feedCache=[];
+
 function toggleFeedMode(){
   playSound('tap');
-  feedMode=feedMode==='friends'?'all':'friends';
-  document.getElementById('feed-switch-label').textContent=feedMode==='friends'?'Amici':'Tutti';
+  feedMode=feedMode==='following'?'all':'following';
+  document.getElementById('feed-switch-label').textContent=feedMode==='following'?'Seguiti':'Tutti';
   document.getElementById('feed-switch-track').classList.toggle('on',feedMode==='all');
+  loadAndRenderFeed();
+}
+
+async function loadAndRenderFeed(){
+  const u=getUser(CUR.id)||CUR;
+  const following=u.following||[];
+  showLoading('Carico feed...');
+  try{
+    const res=await apiCall('GET_FEED_POSTS',{
+      user_id:CUR.id,
+      following,
+      mode:feedMode,
+      limit:60
+    });
+    hideLoading();
+    if(res.success && res.posts){
+      // Merge con post locali non ancora sincronizzati (presenti solo in DB.feed_posts)
+      const cloudIds=new Set(res.posts.map(p=>p.id));
+      const localOnly=DB.feed_posts.filter(p=>!cloudIds.has(p.id));
+      _feedCache=[...res.posts,...localOnly].sort((a,b)=>b.ts-a.ts);
+      // Aggiorna anche i post locali con quelli cloud per coerenza
+      res.posts.forEach(cp=>{
+        const existing=DB.feed_posts.find(p=>p.id===cp.id);
+        if(!existing) DB.feed_posts.unshift(cp);
+      });
+      saveDB();
+    } else {
+      // Fallback locale
+      _feedCache=[...DB.feed_posts].sort((a,b)=>b.ts-a.ts);
+    }
+  }catch(e){
+    hideLoading();
+    _feedCache=[...DB.feed_posts].sort((a,b)=>b.ts-a.ts);
+  }
   renderFeed();
 }
+
 function renderFeed(){
   const u=getUser(CUR.id)||CUR;
-  const myFriends=new Set(u.friends||[]);
+  const myFollowing=new Set(u.following||[]);
   const myLanguages=new Set(u.languages||[]);
-  let posts=[...DB.feed_posts].sort((a,b)=>b.ts-a.ts);
-  if(feedMode==='friends'){
-    posts=posts.filter(p=>p.user_id===CUR.id||myFriends.has(p.user_id));
-  }else{
-    if(myLanguages.size>0) {
+  let posts=[..._feedCache];
+
+  if(feedMode==='following'){
+    posts=posts.filter(p=>p.user_id===CUR.id||myFollowing.has(p.user_id));
+  } else {
+    // modalità "Tutti": filtra per lingua se impostata
+    if(myLanguages.size>0){
       posts=posts.filter(p=>{
         if(p.user_id===CUR.id)return true;
         const pu=getUser(p.user_id);
-        return(pu?.languages||[]).some(l=>myLanguages.has(l));
+        const pLangs=pu?.languages||p.languages||[];
+        return pLangs.some(l=>myLanguages.has(l));
       });
     }
   }
+
   const el=document.getElementById('feed-list');
   if(!posts.length){
-    el.innerHTML='<div class="empty" style="padding:20px 0"><div class="empty-emoji">📭</div><div class="empty-text">Nessuna attivita nel feed.<br><small style="color:var(--text3)">'+(feedMode==='friends'?'Aggiungi amici o passa a "Tutti"':'Imposta le tue lingue nel profilo')+'</small></div></div>';
+    const hint=feedMode==='following'
+      ?' Segui altri utenti o passa a "Tutti"'
+      :' Imposta le tue lingue nel profilo per filtrare';
+    el.innerHTML='<div class="empty" style="padding:20px 0"><div class="empty-emoji">📭</div><div class="empty-text">Nessuna attività nel feed.<br><small style="color:var(--text3)">'+hint+'</small></div></div>';
     return;
   }
   el.innerHTML=posts.slice(0,40).map(renderFeedPost).join('');
+
 }
 function renderFeedPost(p){
   const author=getUser(p.user_id);
@@ -390,8 +448,14 @@ function openPhotoModal(postId){
   document.body.appendChild(ov);
 }
 function addFeedPost(title,category,xp,notes,photo){
-  const p={id:uid(),user_id:CUR.id,title,category,xp,notes:notes||'',photo:photo||'',ts:ts(),likes:[]};
-  DB.feed_posts.unshift(p);saveDB();return p.id;
+  const u=getUser(CUR.id)||CUR;
+  const p={id:uid(),user_id:CUR.id,username:u.username,avatar_url:u.avatar||'',title,category,xp,notes:notes||'',photo:photo||'',ts:ts(),likes:[]};
+  DB.feed_posts.unshift(p);
+  _feedCache.unshift(p);
+  saveDB();
+  // Salva post nel cloud per renderlo visibile agli altri utenti
+  apiCall('SAVE_FEED_POST',p);
+  return p.id;
 }
 
 let qTab='todo',selectedCalDate=today();
@@ -962,34 +1026,120 @@ function renderPendingRules(){
 function renderFriendsScreen(){
   const c=document.getElementById('friends-container');
   const u=getUser(CUR.id)||CUR;
-  const friends=u.friends||[];
-  let h='<div style="padding:0 20px"><div class="section-hd"><span class="section-title">I tuoi amici ('+friends.length+')</span></div>';
-  if(friends.length){
-    friends.forEach(fid=>{
+  const following=u.following||[];
+  const followers=u.followers||{};
+  const followingCount=following.length;
+  const followersCount=Object.keys(followers).length;
+
+  let h='<div style="padding:0 20px">';
+  // Contatori seguiti/seguaci stile Instagram
+  h+='<div style="display:flex;gap:0;margin-bottom:18px;background:var(--card);border-radius:var(--r);border:1px solid var(--border);overflow:hidden">'
+    +'<div style="flex:1;padding:16px;text-align:center;border-right:1px solid var(--border)">'
+    +'<div style="font-size:22px;font-weight:900;color:var(--text)">'+followingCount+'</div>'
+    +'<div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-top:3px">Seguiti</div>'
+    +'</div>'
+    +'<div style="flex:1;padding:16px;text-align:center">'
+    +'<div style="font-size:22px;font-weight:900;color:var(--text)">'+followersCount+'</div>'
+    +'<div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-top:3px">Seguaci</div>'
+    +'</div>'
+    +'</div>';
+
+  // Lista seguiti
+  h+='<div class="section-hd"><span class="section-title">Seguiti ('+followingCount+')</span></div>';
+  if(following.length){
+    following.forEach(fid=>{
       const fu=getUser(fid);
-      h+='<div class="friend-card"><div class="friend-name">'+escHtml(fu?.username||fid)+'</div><span class="tag tag-xp">Lv.'+(fu?.level||1)+'</span></div>';
+      const name=fu?escHtml(fu.username):fid;
+      const av=fu?.avatar?'<img src="'+fu.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':name[0];
+      h+='<div class="friend-card" style="display:flex;align-items:center;gap:10px">'
+        +'<div class="feed-avatar" onclick="viewUserProfile(\''+fid+'\')">'+av+'</div>'
+        +'<div class="friend-name" style="flex:1;cursor:pointer" onclick="viewUserProfile(\''+fid+'\')">'+name+'<div style="font-size:10px;color:var(--text3)">Lv.'+(fu?.level||1)+'</div></div>'
+        +'<button class="btn-sm btn-sm-ghost" onclick="unfollowUser(\''+fid+'\')">Smetti</button>'
+        +'</div>';
     });
   }else{
-    h+='<div class="empty"><div class="empty-emoji">👥</div><div class="empty-text">Nessun amico aggiunto.</div></div>';
+    h+='<div class="empty"><div class="empty-emoji">🔍</div><div class="empty-text">Non segui ancora nessuno.</div></div>';
   }
+
+  // Cerca utenti
   h+='<div class="section-hd" style="margin-top:20px"><span class="section-title">Cerca utenti</span></div>'
     +'<div style="display:flex;gap:8px;margin-bottom:12px"><input class="sm" id="search-user-input" placeholder="Cerca username..." style="flex:1;margin:0"><button class="btn-sm btn-sm-primary" onclick="searchUsersAction()">Cerca</button></div>'
     +'<div id="search-results"></div></div>';
   c.innerHTML=h;
 }
+
+
+
+
+
+
+
+
+
 async function searchUsersAction(){
   const q=document.getElementById('search-user-input').value.trim();
-  if(!q) return;
+  if(!q)return;
   showLoading('Ricerca...');
   const res=await apiCall('SEARCH_USERS',{query:q});
   hideLoading();
   const el=document.getElementById('search-results');
-  if(res.success && res.users){
-    el.innerHTML=res.users.filter(usr=>usr.id!==CUR.id).map(usr=>
-      '<div class="friend-card"><div class="friend-name">'+escHtml(usr.username)+'</div><button class="btn-sm btn-sm-primary" onclick="addFriend(\''+usr.id+'\')">Aggiungi</button></div>'
-    ).join('') || '<div style="font-size:12px;color:var(--text3)">Nessun utente trovato.</div>';
+  if(res.success&&res.users){
+    const u=getUser(CUR.id)||CUR;
+    const myFollowing=new Set(u.following||[]);
+    // Aggiungi utenti trovati al DB locale se non presenti
+    res.users.forEach(usr=>{if(!getUser(usr.id))DB.users.push({...usr,avatar:usr.avatar_url||''});});
+    saveDB();
+    el.innerHTML=res.users.filter(usr=>usr.id!==CUR.id).map(usr=>{
+      const isFollowing=myFollowing.has(usr.id);
+      return '<div class="friend-card" style="display:flex;align-items:center;gap:10px">'
+        +'<div class="feed-avatar" onclick="viewUserProfile(\''+usr.id+'\')">'+escHtml(usr.username[0])+'</div>'
+        +'<div style="flex:1;cursor:pointer" onclick="viewUserProfile(\''+usr.id+'\')">'
+        +'<div class="friend-name">'+escHtml(usr.username)+'</div>'
+        +'<div style="font-size:10px;color:var(--text3)">Lv.'+usr.level+' • '+usr.followers_count+' seguaci</div>'
+        +'</div>'
+        +(isFollowing
+          ?'<button class="btn-sm btn-sm-ghost" onclick="unfollowUser(\''+usr.id+'\')">Seguito ✓</button>'
+          :'<button class="btn-sm btn-sm-primary" onclick="followUser(\''+usr.id+'\',\''+escHtml(usr.username)+'\')">Segui</button>')
+        +'</div>';
+    }).join('')||'<div style="font-size:12px;color:var(--text3)">Nessun utente trovato.</div>';
   }
 }
+
+
+
+
+async function followUser(targetId, targetUsername){
+  const u=getUser(CUR.id);
+  if(!u.following)u.following=[];
+  if(u.following.includes(targetId)){showToast('Stai già seguendo questo utente');return;}
+  u.following.push(targetId);
+  saveDB();syncCUR(u);
+  showToast('✅ Ora segui '+targetUsername+'!');playSound('tap');
+  renderFriendsScreen();
+  await apiCall('FOLLOW_USER',{follower_id:CUR.id,target_id:targetId,follower_username:u.username});
+  apiCall('SYNC_USER_DATA',buildUserPayload(u));
+}
+
+async function unfollowUser(targetId){
+  const u=getUser(CUR.id);
+  if(!u.following)u.following=[];
+  u.following=u.following.filter(id=>id!==targetId);
+  saveDB();syncCUR(u);
+  showToast('Hai smesso di seguire questo utente');playSound('tap');
+  renderFriendsScreen();
+  await apiCall('UNFOLLOW_USER',{follower_id:CUR.id,target_id:targetId});
+  apiCall('SYNC_USER_DATA',buildUserPayload(u));
+}
+
+
+
+
+
+
+
+
+
+
 function addFriend(fid){
   const u=getUser(CUR.id);
   if(!u.friends) u.friends=[];
@@ -1023,11 +1173,124 @@ function renderMyStats(){
   const c=document.getElementById('stats-container');
   const u=getUser(CUR.id)||CUR;
   const s=u.stats||{};
-  let h='<div style="padding:0 20px"><div class="section-hd"><span class="section-title">Le tue statistiche</span></div>'
-    +'<div class="stats-grid">'
-    +Object.entries(s).map(([k,v])=>'<div class="stat-card"><div class="stat-val" style="color:'+(STAT_COLORS[k]||'var(--accent)')+'">'+v+'</div><div class="stat-lbl">'+k.toUpperCase()+'</div></div>').join('')
-    +'</div></div>';
+  const lvl=u.level||1;
+  const xpCur=u.xp_total||0;
+  const xpThis=xpForLevel(lvl);
+  const xpNxt=xpForLevel(lvl+1);
+  const pct=xpBarPct(xpCur,lvl);
+  const av=u.avatar?'<img src="'+u.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<span style="font-size:32px;font-weight:900;color:var(--accent2)">'+escHtml((u.username||'?')[0].toUpperCase())+'</span>';
+  const followingCount=(u.following||[]).length;
+  const followersCount=Object.keys(u.followers||{}).length;
+
+  let h='<div style="padding:0 20px 20px">';
+
+  // Card avatar + info principale
+  h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:14px;text-align:center">'
+    +'<div style="width:80px;height:80px;border-radius:50%;background:var(--accent-bg);border:3px solid rgba(124,106,247,0.4);overflow:hidden;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer" onclick="changeAvatar()">'
+    +av
+    +'<div style="position:absolute;bottom:0;right:0;width:22px;height:22px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid var(--card)">📷</div>'
+    +'</div>'
+    +'<div style="font-size:18px;font-weight:900;margin-bottom:3px">'+escHtml(u.username||'')+'</div>'
+    +'<div style="font-size:12px;color:var(--accent2);font-weight:700;margin-bottom:14px">'+rankTitle(lvl)+' · Lv.'+lvl+'</div>'
+    // Barra XP
+    +'<div style="height:7px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:5px">'
+    +'<div style="height:100%;width:'+pct+'%;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:4px;transition:width 0.8s ease"></div>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:16px">'
+    +'<span>'+xpCur.toLocaleString()+' XP</span><span>→ Lv.'+(lvl+1)+' ('+xpNxt.toLocaleString()+')</span>'
+    +'</div>'
+    // Contatori seguiti/seguaci
+    +'<div style="display:flex;gap:0;background:var(--bg2);border-radius:10px;border:1px solid var(--border);overflow:hidden">'
+    +'<div style="flex:1;padding:10px;text-align:center;border-right:1px solid var(--border)"><div style="font-size:17px;font-weight:900">'+followingCount+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">Seguiti</div></div>'
+    +'<div style="flex:1;padding:10px;text-align:center"><div style="font-size:17px;font-weight:900">'+followersCount+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">Seguaci</div></div>'
+    +'</div>'
+    +'</div>';
+
+  // Stats grid
+  h+='<div class="section-hd"><span class="section-title">Statistiche</span></div>'
+    +'<div class="stats-grid">';
+  Object.entries(s).forEach(([k,v])=>{
+    if(!v&&v!==0)return;
+    h+='<div class="stat-card"><div class="stat-val" style="color:'+(STAT_COLORS[k]||'var(--accent)')+'">'+v+'</div><div class="stat-lbl">'+k.toUpperCase()+'</div></div>';
+  });
+  h+='</div>';
+
+  // Azioni profilo
+  h+='<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">';
+  const isPublic=u.public_profile!==false;
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px">'
+    +'<div><div style="font-size:13px;font-weight:700">Profilo pubblico</div><div style="font-size:11px;color:var(--text3)">Visibile in leaderboard e ricerche</div></div>'
+    +'<div class="toggle-track '+(isPublic?'on':'')+'" id="profile-public-toggle" onclick="togglePublicProfile()"><div class="toggle-knob"></div></div>'
+    +'</div>';
+  h+='<button class="btn-sm btn-sm-ghost" style="width:100%;padding:13px" onclick="openModal(\'modal-nations\');renderNationsModal()">🌍 Lingue parlate</button>';
+  h+='<button class="btn-sm btn-sm-ghost" style="width:100%;padding:13px;color:var(--red)" onclick="doLogout()">Esci dall\'account</button>';
+  h+='</div>';
+
+  h+='</div>';
   c.innerHTML=h;
+}
+
+function togglePublicProfile(){
+  const u=getUser(CUR.id);
+  u.public_profile=!u.public_profile;
+  saveDB();syncCUR(u);
+  const t=document.getElementById('profile-public-toggle');
+  if(t)t.classList.toggle('on',u.public_profile);
+  showToast(u.public_profile?'✅ Profilo pubblico':'🔒 Profilo privato');
+  apiCall('SYNC_USER_DATA',buildUserPayload(u));
+}
+
+function changeAvatar(){
+  pickImage(300,300,0.8,async d=>{
+    const u=getUser(CUR.id);
+    u.avatar=d;saveDB();syncCUR(u);
+    updateDashboard();
+    showToast('📸 Avatar aggiornato!');
+    apiCall('SYNC_USER_DATA',buildUserPayload(u));
+    renderMyStats();
+  });
+}
+
+function doLogout(){
+  if(!confirm('Sei sicuro di voler uscire?'))return;
+  localStorage.removeItem('lq_cur_v5');
+  CUR=null;_feedCache=[];
+  document.getElementById('app').style.display='none';
+  document.getElementById('auth-screen').style.display='flex';
+  showToast('Arrivederci!');
+}
+
+
+
+
+
+function renderNationsModal(){
+  const u=getUser(CUR.id)||CUR;
+  const myLangs=new Set(u.languages||[]);
+  const grid=document.getElementById('nations-grid');
+  if(!grid)return;
+  grid.innerHTML=LANGUAGES.map(l=>{
+    const on=myLangs.has(l);
+    return '<div class="nation-tile'+(on?' on':'')+'" onclick="toggleLanguage(\''+escHtml(l)+'\')" id="lang-'+escHtml(l).replace(/[^a-zA-Z]/g,'_')+'">'+escHtml(l)+'</div>';
+  }).join('');
+}
+
+function toggleLanguage(lang){
+  const u=getUser(CUR.id);
+  if(!u.languages)u.languages=[];
+  const idx=u.languages.indexOf(lang);
+  if(idx>=0)u.languages.splice(idx,1);else u.languages.push(lang);
+  saveDB();syncCUR(u);
+  const id='lang-'+lang.replace(/[^a-zA-Z]/g,'_');
+  const el=document.getElementById(id);
+  if(el)el.classList.toggle('on',u.languages.includes(lang));
+}
+
+function saveLanguages(){
+  const u=getUser(CUR.id);
+  closeModal('modal-nations');
+  showToast('✅ Lingue salvate!');
+  apiCall('SYNC_USER_DATA',buildUserPayload(u));
 }
 
 function renderLeaderboard(){
@@ -1115,10 +1378,33 @@ function openModal(id){document.getElementById(id)?.classList.add('open');}
 function closeModal(id){document.getElementById(id)?.classList.remove('open');}
 
 function viewUserProfile(id){
-  const u=getUser(id);
-  if(!u) return;
+  const u=getUser(id)||{id,username:'Utente',level:1,xp_total:0,stats:{},following:[],followers:{}};
+  const isSelf=id===CUR.id;
+  const myUser=getUser(CUR.id)||CUR;
+  const isFollowing=(myUser.following||[]).includes(id);
+  const followersCount=Object.keys(u.followers||{}).length;
+  const followingCount=(u.following||[]).length;
+  const av=u.avatar?'<img src="'+u.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<span style="font-size:28px;font-weight:900;color:var(--accent2)">'+escHtml((u.username||'?')[0].toUpperCase())+'</span>';
+  const s=u.stats||{};
+  const statsHtml=Object.entries(s).filter(([,v])=>v>0).map(([k,v])=>'<div style="text-align:center"><div style="font-size:16px;font-weight:900;color:'+(STAT_COLORS[k]||'var(--accent)')+'">'+v+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase">'+k+'</div></div>').join('');
   const c=document.getElementById('profile-content');
-  c.innerHTML='<div style="padding:20px;text-align:center"><div style="font-size:20px;font-weight:700;margin-bottom:6px">'+escHtml(u.username)+'</div><div style="font-size:12px;color:var(--text3);margin-bottom:14px">Livello '+(u.level||1)+' • '+u.xp_total+' XP totali</div><button class="btn btn-primary" onclick="closeModal(\'modal-profile\')">Chiudi</button></div>';
+  c.innerHTML=
+    '<div style="padding:24px 20px 20px;text-align:center">'
+    +'<div style="width:72px;height:72px;border-radius:50%;background:var(--accent-bg);border:2px solid rgba(124,106,247,0.4);overflow:hidden;margin:0 auto 12px;display:flex;align-items:center;justify-content:center">'+av+'</div>'
+    +'<div style="font-size:20px;font-weight:900;margin-bottom:4px">'+escHtml(u.username||'Utente')+'</div>'
+    +'<div style="font-size:12px;color:var(--accent2);font-weight:700;margin-bottom:14px">'+rankTitle(u.level||1)+' · Lv.'+(u.level||1)+'</div>'
+    +'<div style="display:flex;gap:0;margin-bottom:16px;background:var(--bg2);border-radius:10px;border:1px solid var(--border);overflow:hidden">'
+    +'<div style="flex:1;padding:12px;text-align:center;border-right:1px solid var(--border)"><div style="font-size:18px;font-weight:900">'+(u.xp_total||0).toLocaleString()+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">XP</div></div>'
+    +'<div style="flex:1;padding:12px;text-align:center;border-right:1px solid var(--border)"><div style="font-size:18px;font-weight:900">'+followingCount+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">Seguiti</div></div>'
+    +'<div style="flex:1;padding:12px;text-align:center"><div style="font-size:18px;font-weight:900">'+followersCount+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">Seguaci</div></div>'
+    +'</div>'
+    +(statsHtml?'<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:16px">'+statsHtml+'</div>':'')
+    +(!isSelf
+      ?(isFollowing
+        ?'<button class="btn btn-primary" style="opacity:0.7" onclick="unfollowUser(\''+id+'\');closeModal(\'modal-profile\')">✓ Seguito · Smetti di seguire</button>'
+        :'<button class="btn btn-primary" onclick="followUser(\''+id+'\',\''+escHtml(u.username||'')+'\');closeModal(\'modal-profile\')">➕ Segui</button>')
+      :'<button class="btn btn-primary" onclick="closeModal(\'modal-profile\')">Chiudi</button>')
+    +'</div>';
   openModal('modal-profile');
 }
 
@@ -1133,11 +1419,14 @@ function bootApp(){
   hideSplash();
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='flex';
+  // [PATCH V3] Imposta etichetta feed corretta al boot
+  const lbl=document.getElementById('feed-switch-label');
+  if(lbl)lbl.textContent='Seguiti';
+  feedMode='following';
   gotoTab('home');
   playSound('login');
-  
-  apiCall('GET_BANNED_WORDS', {}).then(res => {
-    if (res.success) BANNED_WORDS_LIST = res.words || [];
+  apiCall('GET_BANNED_WORDS',{}).then(res=>{
+    if(res.success)BANNED_WORDS_LIST=res.words||[];
   });
 }
 
