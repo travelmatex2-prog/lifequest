@@ -8,6 +8,13 @@
 </head>
 <body>
 
+<!-- SPLASH SCREEN (Patch 12) -->
+<div id="splash" style="position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.5s">
+  <div style="font-size:52px;font-weight:900;letter-spacing:-3px;background:linear-gradient(135deg,#7c6af7,#3dcff5,#f5c842);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:pulse 1s ease-in-out infinite">LifeQuest</div>
+  <div style="font-size:13px;color:var(--text3);margin-top:8px">Il tuo mondo. Come un gioco di ruolo.</div>
+  <div style="margin-top:32px;width:40px;height:40px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite"></div>
+</div>
+
 <!-- AUTH -->
 <div id="auth-screen">
   <div class="auth-logo">LifeQuest</div>
@@ -132,7 +139,7 @@
   <div style="padding:0 20px 20px">
     <div class="section-hd" style="margin-bottom:8px"><span class="section-title">Unisciti a sfida</span></div>
     <div style="display:flex;gap:8px">
-      <input class="sm" id="join-code-input" placeholder="Codice (es. LQ-4829)" style="flex:1;margin:0">
+      <input class="sm" id="join-code-input" placeholder="Codice numerico (es. 1001)" style="flex:1;margin:0">
       <button class="btn-sm btn-sm-primary" onclick="joinChallenge()">Entra</button>
     </div>
   </div>
@@ -154,6 +161,7 @@
   <div class="tabs">
     <button class="tab active" onclick="switchStatsTab('stats')">Le mie</button>
     <button class="tab" onclick="switchStatsTab('leaderboard')">Leaderboard</button>
+    <button class="tab" onclick="switchStatsTab('calendar')">📅 Cal.</button>
   </div>
   <div id="stats-container"></div>
 </div>
@@ -169,347 +177,288 @@
     <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Quest
   </button>
   <button class="nav-btn" id="nav-study" onclick="gotoTab('study')">
-    <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>Studio
+    <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>Studio
   </button>
   <button class="nav-btn" id="nav-routine" onclick="gotoTab('routine')">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Routine
+    <svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Routine
   </button>
   <button class="nav-btn" id="nav-pvp" onclick="gotoTab('pvp')">
-    <svg viewBox="0 0 24 24"><path d="M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z"/><path d="M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/><path d="M9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5z"/><path d="M3.5 14H5v1.5c0 .83-.67 1.5-1.5 1.5S2 16.33 2 15.5 2.67 14 3.5 14z"/><path d="M14 14.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-5c-.83 0-1.5-.67-1.5-1.5z"/><path d="M10 9.5C10 8.67 9.33 8 8.5 8h-5C2.67 8 2 8.67 2 9.5S2.67 11 3.5 11h5c.83 0 1.5-.67 1.5-1.5z"/></svg>Sfide
+    <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>Sfide
   </button>
   <button class="nav-btn" id="nav-friends" onclick="gotoTab('friends')">
     <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Amici
   </button>
   <button class="nav-btn" id="nav-stats" onclick="gotoTab('stats')">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>Profilo
+    <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Profilo
   </button>
 </nav>
+</div><!-- /app -->
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- AUDIO ELEMENTS -->
+<audio id="snd-tap" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" preload="auto"></audio>
+<audio id="snd-xp" src="https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3" preload="auto"></audio>
+<audio id="snd-levelup" src="https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3" preload="auto"></audio>
+<audio id="snd-trophy" src="https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3" preload="auto"></audio>
+<audio id="snd-like" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" preload="auto"></audio>
+<audio id="snd-error" src="https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3" preload="auto"></audio>
+<audio id="snd-open" src="https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3" preload="auto"></audio>
+<audio id="snd-quest" src="https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3" preload="auto"></audio>
+<audio id="snd-challenge" src="https://assets.mixkit.co/active_storage/sfx/2188/2188-preview.mp3" preload="auto"></audio>
+<audio id="snd-login" src="https://assets.mixkit.co/active_storage/sfx/1434/1434-preview.mp3" preload="auto"></audio>
+
+<!-- MODALI DI SISTEMA -->
+<div id="modal-pin-reset" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-pin-reset')">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Recupero Password</div>
+    <div class="field"><label>USERNAME</label><input type="text" id="pr-user" placeholder="tuo_username"></div>
+    <div class="field"><label>PIN (4 CIFRE)</label><input type="text" id="pr-pin" placeholder="es. 7291" maxlength="4" inputmode="numeric"></div>
+    <div class="field"><label>NUOVA PASSWORD</label><input type="password" id="pr-newpass" placeholder="min. 6 caratteri"></div>
+    <div id="pr-error" class="error-msg" style="margin-bottom:10px"></div>
+    <button class="btn btn-primary" onclick="doResetPin()">Reimposta Password</button>
+  </div>
 </div>
 
-<!-- ═══ MODALS ═══ -->
-
-<!-- ADD QUEST -->
-<div class="modal-overlay" id="modal-add-quest" onclick="if(event.target===this)closeModal('modal-add-quest')">
-  <div class="modal-sheet">
+<div id="modal-add-quest" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-add-quest')">
+  <div class="modal-box">
     <div class="modal-handle"></div>
     <div class="modal-title">Nuova Quest</div>
-    <label class="input-label">NOME</label>
-    <input class="sm" id="q-name" placeholder="es. Studiare Capitolo 3" style="margin-bottom:10px">
-    <label class="input-label">CATEGORIA</label>
-    <select class="sm" id="q-cat" style="margin-bottom:10px">
-      <option value="mente">🧠 Mente</option><option value="corpo">💪 Corpo</option>
-      <option value="cultura">📚 Cultura</option><option value="sociale">🤝 Sociale</option>
-      <option value="produttività">✅ Produttività</option><option value="sfide">⚔️ Sfide</option>
-      <option value="altro">⭐ Altro</option>
-    </select>
-    <label class="input-label">DIFFICOLTÀ</label>
-    <select class="sm" id="q-diff" style="margin-bottom:10px">
-      <option value="1">⭐ Facile</option><option value="2" selected>⭐⭐ Normale</option>
-      <option value="3">⭐⭐⭐ Difficile</option><option value="4">⭐⭐⭐⭐ Molto difficile</option>
-    </select>
-    <label class="input-label">TIPO</label>
-    <select class="sm" id="q-type" style="margin-bottom:10px">
-      <option value="todo">✅ To-Do</option><option value="quest">⚔️ Obiettivo</option>
-    </select>
-    <label class="input-label">NOTE</label>
-    <textarea class="sm" id="q-notes" placeholder="Dettagli..." style="margin-bottom:10px"></textarea>
-    <button class="btn-sm btn-sm-ghost" style="width:100%;margin-bottom:10px" onclick="attachQuestPhoto()">📷 Allega foto</button>
-    <img id="q-photo-preview" style="display:none;width:100%;border-radius:8px;margin-bottom:10px;max-height:160px;object-fit:cover">
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-add-quest')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="addQuest()">Aggiungi</button>
+    <div class="field"><label>NOME</label><input type="text" id="q-name" placeholder="es. Allenamento intensivo"></div>
+    <div class="field"><label>CATEGORIA</label>
+      <select id="q-cat" class="sm">
+        <option value="mente">Mente</option>
+        <option value="corpo">Corpo</option>
+        <option value="cultura">Cultura</option>
+        <option value="sociale">Sociale</option>
+        <option value="produttivita">Produttività</option>
+      </select>
     </div>
+    <div class="field"><label>DIFFICOLTÀ</label>
+      <select id="q-diff" class="sm">
+        <option value="0">⭐ Facile</option>
+        <option value="1">⭐⭐ Medio</option>
+        <option value="2" selected>⭐⭐⭐ Impegnativo</option>
+        <option value="3">⭐⭐⭐⭐ Difficile</option>
+        <option value="4">⭐⭐⭐⭐⭐ Epico</option>
+      </select>
+    </div>
+    <div class="field"><label>TIPO</label>
+      <select id="q-type" class="sm">
+        <option value="todo">To-Do (Singola)</option>
+        <option value="quest">Obiettivo / Quest</option>
+      </select>
+    </div>
+    <div class="field"><label>NOTE (OPZIONALE)</label><textarea id="q-notes" class="sm" placeholder="Dettagli..."></textarea></div>
+    <div class="field">
+      <button class="btn-sm btn-sm-ghost" style="width:100%" onclick="attachQuestPhoto()">📷 Allega foto</button>
+      <img id="q-photo-preview" style="display:none;width:100%;margin-top:8px;border-radius:8px;max-height:120px;object-fit:cover">
+    </div>
+    <button class="btn btn-primary" onclick="addQuest()">Crea Quest</button>
   </div>
 </div>
 
-<!-- EDIT QUEST -->
-<div class="modal-overlay" id="modal-edit-quest" onclick="if(event.target===this)closeModal('modal-edit-quest')">
-  <div class="modal-sheet">
+<div id="modal-add-book" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-add-book')">
+  <div class="modal-box" style="max-height:90vh;overflow-y:auto">
     <div class="modal-handle"></div>
-    <div class="modal-title">Modifica Quest</div>
-    <input type="hidden" id="eq-id">
-    <label class="input-label">NOME</label>
-    <input class="sm" id="eq-name" placeholder="Nome quest" style="margin-bottom:10px">
-    <label class="input-label">CATEGORIA</label>
-    <select class="sm" id="eq-cat" style="margin-bottom:10px">
-      <option value="mente">🧠 Mente</option><option value="corpo">💪 Corpo</option>
-      <option value="cultura">📚 Cultura</option><option value="sociale">🤝 Sociale</option>
-      <option value="produttività">✅ Produttività</option><option value="sfide">⚔️ Sfide</option>
-      <option value="altro">⭐ Altro</option>
-    </select>
-    <label class="input-label">DIFFICOLTÀ</label>
-    <select class="sm" id="eq-diff" style="margin-bottom:10px">
-      <option value="1">⭐ Facile</option><option value="2">⭐⭐ Normale</option>
-      <option value="3">⭐⭐⭐ Difficile</option><option value="4">⭐⭐⭐⭐ Molto difficile</option>
-    </select>
-    <label class="input-label">NOTE</label>
-    <textarea class="sm" id="eq-notes" placeholder="Dettagli..." style="margin-bottom:10px"></textarea>
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-red" style="flex:1" onclick="deleteQuestFromModal()">Elimina</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="updateQuest()">Salva</button>
+    <div class="modal-title">Aggiungi Libro</div>
+    <div class="field" style="position:relative"><label>TITOLO</label><input type="text" id="bk-title" placeholder="es. Atomic Habits" oninput="onBookTitleInput()"><div id="book-suggestions" class="suggestions-dropdown" style="display:none"></div></div>
+    <div class="field"><label>AUTORE</label><input type="text" id="bk-author" placeholder="es. James Clear"></div>
+    <div class="field"><label>GENERE</label>
+      <select id="bk-genre" class="sm">
+        <option value="saggistica">Saggistica</option>
+        <option value="filosofia">Filosofia</option>
+        <option value="scienza">Scienza</option>
+        <option value="storia">Storia</option>
+        <option value="economia">Economia</option>
+        <option value="narrativa">Narrativa</option>
+        <option value="self-help">Self-Help</option>
+        <option value="tecnico">Tecnico</option>
+        <option value="altro">Altro</option>
+      </select>
     </div>
+    <div class="field"><label>DIFFICOLTÀ</label>
+      <select id="bk-diff" class="sm">
+        <option value="1">⭐ Facile</option>
+        <option value="2">⭐⭐ Normale</option>
+        <option value="3" selected>⭐⭐⭐ Impegnativo</option>
+        <option value="4">⭐⭐⭐⭐ Difficile</option>
+        <option value="5">⭐⭐⭐⭐⭐ Complesso</option>
+      </select>
+    </div>
+    <div class="field"><label>NUMERO TOTALE PAGINE</label><input type="number" id="bk-pages" placeholder="es. 300"></div>
+    <div class="field"><label>EMOJI / COPERTINA (OPZIONALE)</label><input type="text" id="bk-emoji" placeholder="📖"></div>
+    <button class="btn btn-primary" onclick="addBook()">Salva Libro</button>
   </div>
 </div>
 
-<!-- ADD BOOK -->
-<div class="modal-overlay" id="modal-add-book" onclick="if(event.target===this)closeModal('modal-add-book')">
-  <div class="modal-sheet">
+<div id="modal-log-reading" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-log-reading')">
+  <div class="modal-box">
     <div class="modal-handle"></div>
-    <div class="modal-title">📖 Aggiungi Libro</div>
-    <label class="input-label">TITOLO</label>
-    <div style="position:relative">
-      <input class="sm" id="bk-title" placeholder="es. Sapiens" style="margin-bottom:4px" oninput="onBookTitleInput()">
-      <div id="book-suggestions" class="suggestions-dropdown" style="display:none"></div>
-    </div>
-    <label class="input-label">AUTORE</label>
-    <input class="sm" id="bk-author" placeholder="es. Y.N. Harari" style="margin-bottom:10px">
-    <label class="input-label">GENERE</label>
-    <select class="sm" id="bk-genre" style="margin-bottom:10px">
-      <option value="saggistica">📰 Saggistica</option><option value="filosofia">🧠 Filosofia</option>
-      <option value="scienza">🔬 Scienza</option><option value="storia">🏛️ Storia</option>
-      <option value="economia">📈 Economia</option><option value="narrativa">📖 Narrativa</option>
-      <option value="self-help">🌱 Self-help</option><option value="tecnico">⚙️ Tecnico</option>
-      <option value="altro">⭐ Altro</option>
-    </select>
-    <label class="input-label">DIFFICOLTÀ</label>
-    <select class="sm" id="bk-diff" style="margin-bottom:10px">
-      <option value="1">⭐ Molto facile +50 XP</option><option value="2">⭐⭐ Facile +150 XP</option>
-      <option value="3" selected>⭐⭐⭐ Medio +300 XP</option><option value="4">⭐⭐⭐⭐ Difficile +500 XP</option>
-      <option value="5">⭐⭐⭐⭐⭐ Expert +800 XP</option>
-    </select>
-    <label class="input-label">PAGINE TOTALI</label>
-    <input class="sm" id="bk-pages" type="number" placeholder="es. 320" min="1" style="margin-bottom:10px">
-    <label class="input-label">EMOJI</label>
-    <input class="sm" id="bk-emoji" placeholder="📖" maxlength="2" style="margin-bottom:10px">
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-add-book')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="addBook()">Inizia a leggere</button>
-    </div>
-  </div>
-</div>
-
-<!-- LOG READING -->
-<div class="modal-overlay" id="modal-log-reading" onclick="if(event.target===this)closeModal('modal-log-reading')">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-title" id="reading-modal-title">📖 Sessione lettura</div>
+    <div class="modal-title" id="reading-modal-title">Registra Lettura</div>
     <input type="hidden" id="rd-book-id">
-    <label class="input-label">PAGINE LETTE OGGI</label>
-    <input class="sm" id="rd-pages" type="number" placeholder="es. 30" min="1" style="margin-bottom:10px">
-    <label class="input-label">PAGINA CORRENTE</label>
-    <input class="sm" id="rd-current" type="number" placeholder="es. 145" style="margin-bottom:10px">
-    <label class="input-label">NOTE</label>
-    <textarea class="sm" id="rd-notes" placeholder="Cosa ti ha colpito?" style="margin-bottom:10px"></textarea>
-    <div class="info-box">Ogni pagina = <b style="color:var(--gold)">3 XP</b>. Completare sblocca il bonus difficoltà.</div>
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-log-reading')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="logReading()">Salva</button>
-    </div>
+    <div class="field"><label>PAGINE LETTE OGGI</label><input type="number" id="rd-pages" placeholder="es. 25"></div>
+    <div class="field"><label>PAGINA ATTUALE TOTALE</label><input type="number" id="rd-current" placeholder="es. 150"></div>
+    <div class="field"><label>NOTE / RIFLESSIONI (OPZIONALE)</label><textarea id="rd-notes" class="sm" placeholder="Cosa hai imparato?"></textarea></div>
+    <button class="btn btn-primary" onclick="logReading()">Registra</button>
   </div>
 </div>
 
-<!-- ADD EXAM -->
-<div class="modal-overlay" id="modal-add-exam" onclick="if(event.target===this)closeModal('modal-add-exam')">
-  <div class="modal-sheet">
+<div id="modal-add-exam" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-add-exam')">
+  <div class="modal-box">
     <div class="modal-handle"></div>
-    <div class="modal-title">Nuovo Esame</div>
-    <label class="input-label">NOME MATERIA</label>
-    <input class="sm" id="ex-name" placeholder="es. Economia Politica" style="margin-bottom:10px">
-    <label class="input-label">DATA ESAME</label>
-    <input class="sm" id="ex-date" type="date" style="margin-bottom:10px">
-    <label class="input-label">ORE TARGET</label>
-    <input class="sm" id="ex-hours" type="number" placeholder="es. 40" style="margin-bottom:10px">
-    <label class="input-label">EMOJI</label>
-    <input class="sm" id="ex-emoji" placeholder="📘" maxlength="2" style="margin-bottom:10px">
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-add-exam')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="addExam()">Crea</button>
-    </div>
+    <div class="modal-title">Nuovo Esame / Materia</div>
+    <div class="field"><label>NOME ESAME</label><input type="text" id="ex-name" placeholder="es. Analisi Matematica 1"></div>
+    <div class="field"><label>DATA ESAME (OPZIONALE)</label><input type="date" id="ex-date" class="sm"></div>
+    <div class="field"><label>ORE STIMATE</label><input type="number" id="ex-hours" placeholder="40"></div>
+    <div class="field"><label>EMOJI (OPZIONALE)</label><input type="text" id="ex-emoji" placeholder="📐"></div>
+    <button class="btn btn-primary" onclick="addExam()">Crea Esame</button>
   </div>
 </div>
 
-<!-- ADD CHAPTER -->
-<div class="modal-overlay" id="modal-add-chapter" onclick="if(event.target===this)closeModal('modal-add-chapter')">
-  <div class="modal-sheet">
+<div id="modal-add-chapter" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-add-chapter')">
+  <div class="modal-box">
     <div class="modal-handle"></div>
-    <div class="modal-title">Aggiungi Capitolo</div>
+    <div class="modal-title">Nuovo Capitolo</div>
     <input type="hidden" id="ch-exam-id">
-    <label class="input-label">NOME</label>
-    <input class="sm" id="ch-name" placeholder="es. Cap. 1 – Micro" style="margin-bottom:10px">
-    <label class="input-label">DIFFICOLTÀ</label>
-    <select class="sm" id="ch-diff" style="margin-bottom:10px">
-      <option value="1">Facile</option><option value="2">Normale</option>
-      <option value="3" selected>Medio</option><option value="4">Difficile</option><option value="5">Molto difficile</option>
-    </select>
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-add-chapter')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="addChapter()">Aggiungi</button>
+    <div class="field"><label>TITOLO CAPITOLO</label><input type="text" id="ch-name" placeholder="es. Limiti e Continuità"></div>
+    <div class="field"><label>DIFFICOLTÀ</label>
+      <select id="ch-diff" class="sm">
+        <option value="1">⭐ Facile</option>
+        <option value="2">⭐⭐ Medio</option>
+        <option value="3" selected>⭐⭐⭐ Impegnativo</option>
+        <option value="4">⭐⭐⭐⭐ Difficile</option>
+        <option value="5">⭐⭐⭐⭐⭐ Estremo</option>
+      </select>
     </div>
+    <button class="btn btn-primary" onclick="addChapter()">Aggiungi Capitolo</button>
   </div>
 </div>
 
-<!-- ADD CONCEPT -->
-<div class="modal-overlay" id="modal-add-concept" onclick="if(event.target===this)closeModal('modal-add-concept')">
-  <div class="modal-sheet">
+<div id="modal-add-concept" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-add-concept')">
+  <div class="modal-box">
     <div class="modal-handle"></div>
-    <div class="modal-title">Aggiungi Concetto</div>
+    <div class="modal-title">Nuovo Concetto</div>
     <input type="hidden" id="co-chapter-id">
-    <label class="input-label">CONCETTO</label>
-    <input class="sm" id="co-name" placeholder="es. Elasticità della domanda" style="margin-bottom:10px">
-    <label class="input-label">NOTE</label>
-    <textarea class="sm" id="co-notes" placeholder="Definizione..." style="margin-bottom:10px"></textarea>
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-add-concept')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="addConcept()">Aggiungi</button>
-    </div>
+    <div class="field"><label>TITOLO CONCETTO</label><input type="text" id="co-name" placeholder="es. Teorema di Bolzano"></div>
+    <div class="field"><label>NOTE / FORMULA (OPZIONALE)</label><textarea id="co-notes" class="sm" placeholder="Appunti rapidi..."></textarea></div>
+    <button class="btn btn-primary" onclick="addConcept()">Aggiungi Concetto</button>
   </div>
 </div>
 
-<!-- LOG SESSION -->
-<div class="modal-overlay" id="modal-log-session" onclick="if(event.target===this)closeModal('modal-log-session')">
-  <div class="modal-sheet">
+<div id="modal-log-session" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-log-session')">
+  <div class="modal-box">
     <div class="modal-handle"></div>
-    <div class="modal-title">⏱️ Sessione Studio</div>
+    <div class="modal-title">Registra Sessione Studio</div>
     <input type="hidden" id="ss-exam-id">
-    <label class="input-label">MINUTI</label>
-    <input class="sm" id="ss-mins" type="number" placeholder="es. 45" min="5" style="margin-bottom:10px">
-    <label class="input-label">FOCUS (1–5)</label>
-    <select class="sm" id="ss-focus" style="margin-bottom:10px">
-      <option value="1">1 – Molto distratto</option><option value="2">2 – Poco focus</option>
-      <option value="3" selected>3 – Normale</option><option value="4">4 – Buon focus</option>
-      <option value="5">5 – Laser ⚡</option>
-    </select>
-    <label class="input-label">NOTE</label>
-    <textarea class="sm" id="ss-notes" placeholder="Cosa hai studiato?" style="margin-bottom:10px"></textarea>
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-log-session')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="logSession()">Salva</button>
+    <div class="field"><label>MINUTI DI STUDIO</label><input type="number" id="ss-mins" placeholder="es. 45"></div>
+    <div class="field"><label>LIVELLO DI FOCUS</label>
+      <select id="ss-focus" class="sm">
+        <option value="1">⭐ Basso</option>
+        <option value="2">⭐⭐ Medio-Basso</option>
+        <option value="3" selected>⭐⭐⭐ Buono</option>
+        <option value="4">⭐⭐⭐⭐ Alto</option>
+        <option value="5">⭐⭐⭐⭐⭐ Massimo</option>
+      </select>
     </div>
+    <div class="field"><label>NOTE (OPZIONALE)</label><textarea id="ss-notes" class="sm" placeholder="Cosa hai completato?"></textarea></div>
+    <button class="btn btn-primary" onclick="logSession()">Registra Sessione</button>
   </div>
 </div>
 
-<!-- CUSTOM ROUTINE -->
-<div class="modal-overlay" id="modal-custom-routine" onclick="if(event.target===this)closeModal('modal-custom-routine')">
-  <div class="modal-sheet">
+<div id="modal-create-challenge" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-create-challenge')">
+  <div class="modal-box" style="max-height:90vh;overflow-y:auto">
     <div class="modal-handle"></div>
-    <div class="modal-title">⭐ Routine Custom</div>
-    <label class="input-label">NOME ATTIVITÀ</label>
-    <input class="sm" id="cr-name" placeholder="es. Yoga" style="margin-bottom:10px">
-    <label class="input-label">XP (max 50)</label>
-    <input class="sm" id="cr-xp" type="number" placeholder="es. 25" min="1" max="50" style="margin-bottom:10px">
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-custom-routine')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="saveCustomRoutine()">Registra</button>
+    <div class="modal-title">Crea Nuova Sfida PvP</div>
+    <div class="field"><label>TIPO</label>
+      <select id="pvp-type" class="sm">
+        <option value="athletic">🏋️ Atletica</option>
+        <option value="mental">🧠 Mentale</option>
+        <option value="mixed">⚡ Mista</option>
+      </select>
     </div>
+    <div class="field"><label>TITOLO SFIDA</label><input type="text" id="pvp-title" placeholder="es. Chi legge più pagine in 7 giorni"></div>
+    <div class="field"><label>DESCRIZIONE</label><textarea id="pvp-desc" class="sm" placeholder="Regole generali..."></textarea></div>
+    <div class="field"><label>XP IN PALIO (STAKE)</label><input type="number" id="pvp-stake" value="20" min="5" max="20"></div>
+    <div class="field"><label>SCADENZA</label><input type="date" id="pvp-deadline" class="sm"></div>
+    
+    <!-- [PATCH 7c] Toggle Pubblica Sfida -->
+    <div class="visibility-toggle" style="margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+      <div class="toggle-track" id="pvp-public" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+      <span class="toggle-label" style="font-size:12px;color:var(--text2)">Pubblica nel feed (tutti possono accettare)</span>
+    </div>
+
+    <div class="field">
+      <label class="input-label">REGOLE AGGIUNTIVE</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <button class="btn-sm btn-sm-ghost" onclick="addRule('metrica')">+ Metrica</button>
+        <button class="btn-sm btn-sm-ghost" onclick="addRule('durata')">+ Durata</button>
+        <button class="btn-sm btn-sm-ghost" onclick="addRule('condizione')">+ Condizione</button>
+        <button class="btn-sm btn-sm-ghost" onclick="addRule('penalita')">+ Penalità</button>
+      </div>
+      <div id="pvp-rules-list"></div>
+    </div>
+    <button class="btn btn-primary" onclick="createChallenge()">Pubblica Sfida</button>
   </div>
 </div>
 
-<!-- CREATE CHALLENGE -->
-<div class="modal-overlay" id="modal-create-challenge" onclick="if(event.target===this)closeModal('modal-create-challenge')">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-title">⚔️ Crea Sfida</div>
-    <label class="input-label">TIPO</label>
-    <select class="sm" id="pvp-type" style="margin-bottom:10px">
-      <option value="athletic">🏋️ Atletica</option><option value="mental">🧠 Mentale</option><option value="mixed">🔀 Mista</option>
-    </select>
-    <label class="input-label">TITOLO</label>
-    <input class="sm" id="pvp-title" placeholder="es. Chi legge più pagine in 7 giorni" style="margin-bottom:10px">
-    <label class="input-label">DESCRIZIONE</label>
-    <textarea class="sm" id="pvp-desc" placeholder="Obiettivo della sfida..." style="margin-bottom:10px"></textarea>
-    <div class="divider"></div>
-    <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">📋 Regole</div>
-    <div id="pvp-rules-list"></div>
-    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="btn-sm btn-sm-ghost" style="font-size:11px" onclick="addRule('metrica')">+ Metrica</button>
-      <button class="btn-sm btn-sm-ghost" style="font-size:11px" onclick="addRule('durata')">+ Durata</button>
-      <button class="btn-sm btn-sm-ghost" style="font-size:11px" onclick="addRule('condizione')">+ Condizione</button>
-      <button class="btn-sm btn-sm-ghost" style="font-size:11px" onclick="addRule('penalita')">+ Penalità</button>
-    </div>
-    <div class="divider"></div>
-    <label class="input-label">XP IN PALIO (max 20)</label>
-    <input class="sm" id="pvp-stake" type="number" placeholder="20" min="5" max="20" value="20" style="margin-bottom:10px">
-    <label class="input-label">SCADENZA</label>
-    <input class="sm" id="pvp-deadline" type="date" style="margin-bottom:10px">
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-create-challenge')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="createChallenge()">Crea &amp; genera codice</button>
-    </div>
-  </div>
-</div>
-
-<!-- ADD RULE -->
-<div class="modal-overlay" id="modal-add-rule" onclick="if(event.target===this)closeModal('modal-add-rule')">
-  <div class="modal-sheet">
+<div id="modal-add-rule" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-add-rule')">
+  <div class="modal-box">
     <div class="modal-handle"></div>
     <div class="modal-title" id="rule-modal-title">Aggiungi Regola</div>
     <input type="hidden" id="rule-type">
     <div id="rule-fields"></div>
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-add-rule')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="saveRule()">Aggiungi</button>
-    </div>
+    <button class="btn btn-primary" onclick="saveRule()">Aggiungi Regola</button>
   </div>
 </div>
 
-<!-- DECLARE WINNER -->
-<div class="modal-overlay" id="modal-declare-winner" onclick="if(event.target===this)closeModal('modal-declare-winner')">
-  <div class="modal-sheet">
+<div id="modal-challenge-detail" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-challenge-detail')">
+  <div class="modal-box" id="challenge-detail-content" style="padding:0"></div>
+</div>
+
+<div id="modal-declare-winner" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-declare-winner')">
+  <div class="modal-box">
     <div class="modal-handle"></div>
-    <div class="modal-title">🏆 Dichiara vincitore</div>
+    <div class="modal-title">Dichiara Vincitore</div>
     <input type="hidden" id="win-challenge-id">
-    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Accordatevi sul risultato. Il vincitore riceve tutti gli XP.</p>
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-primary" style="flex:1" onclick="declareWinner('me')">🏆 Ho vinto io</button>
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="declareWinner('opponent')">Ha vinto lui/lei</button>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="declareWinner('me')">🏆 Ho vinto io</button>
+      <button class="btn btn-sm btn-sm-ghost" onclick="declareWinner('opp')">Avversario ha vinto</button>
+      <button class="btn btn-sm btn-sm-ghost" onclick="declareWinner('draw')">🤝 Pareggio</button>
     </div>
-    <button class="btn-sm btn-sm-red" style="width:100%;margin-top:8px" onclick="declareWinner('draw')">🤝 Pareggio</button>
   </div>
 </div>
 
-<!-- CHALLENGE DETAIL -->
-<div class="modal-overlay" id="modal-challenge-detail" onclick="if(event.target===this)closeModal('modal-challenge-detail')">
-  <div class="modal-sheet"><div id="challenge-detail-content"></div></div>
-</div>
-
-<!-- PIN RESET -->
-<div class="modal-overlay" id="modal-pin-reset" onclick="if(event.target===this)closeModal('modal-pin-reset')">
-  <div class="modal-sheet">
+<div id="modal-custom-routine" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-custom-routine')">
+  <div class="modal-box">
     <div class="modal-handle"></div>
-    <div class="modal-title">Recupero password</div>
-    <label class="input-label">USERNAME</label>
-    <input class="sm" id="pr-user" placeholder="il tuo username" style="margin-bottom:10px">
-    <label class="input-label">PIN</label>
-    <input class="sm" id="pr-pin" type="text" maxlength="4" inputmode="numeric" placeholder="4 cifre" style="margin-bottom:10px">
-    <label class="input-label">NUOVA PASSWORD</label>
-    <input class="sm" id="pr-newpass" type="password" placeholder="nuova password" style="margin-bottom:10px">
-    <div id="pr-error" class="error-msg"></div>
-    <div class="btn-row">
-      <button class="btn-sm btn-sm-ghost" style="flex:1" onclick="closeModal('modal-pin-reset')">Annulla</button>
-      <button class="btn-sm btn-sm-primary" style="flex:2" onclick="doResetPin()">Reimposta</button>
-    </div>
+    <div class="modal-title">Routine Personalizzata</div>
+    <div class="field"><label>NOME ROUTINE</label><input type="text" id="cr-name" placeholder="es. Doccia scozzese"></div>
+    <div class="field"><label>XP (MAX 50)</label><input type="number" id="cr-xp" value="20" min="5" max="50"></div>
+    <button class="btn btn-primary" onclick="saveCustomRoutine()">Salva e Completa</button>
   </div>
 </div>
 
-<!-- PRIVACY -->
-<div class="modal-overlay" id="modal-privacy" onclick="if(event.target===this)closeModal('modal-privacy')">
-  <div class="modal-sheet"><div class="modal-handle"></div><div id="privacy-content"></div></div>
-</div>
-
-<!-- NAZIONI -->
-<div class="modal-overlay" id="modal-nations" onclick="if(event.target===this)closeModal('modal-nations')">
-  <div class="modal-sheet"><div class="modal-handle"></div><div id="nations-content"></div></div>
-</div>
-
-<!-- PROFILO UTENTE -->
-<div class="modal-overlay" id="modal-profile" onclick="if(event.target===this)closeModal('modal-profile')">
-  <div class="modal-sheet" style="padding:0 0 32px">
-    <div class="modal-handle" style="margin:16px auto 0"></div>
-    <div id="profile-content"></div>
+<div id="modal-nations" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-nations')">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Lingue parlate</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Seleziona le lingue che parli per filtrare il feed globale.</div>
+    <div id="nations-grid" class="nations-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px"></div>
+    <button class="btn btn-primary" onclick="saveLanguages()">Salva Lingue</button>
   </div>
 </div>
 
-<div id="toast"></div>
+<div id="modal-privacy" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-privacy')">
+  <div class="modal-box" id="privacy-content"></div>
+</div>
+
+<div id="modal-profile" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-profile')">
+  <div class="modal-box" id="profile-content" style="padding:0"></div>
+</div>
+
 <script src="script.js"></script>
 </body>
 </html>
