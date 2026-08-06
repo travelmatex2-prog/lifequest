@@ -1122,9 +1122,17 @@ function viewUserProfile(id){
   openModal('modal-profile');
 }
 
+function hideSplash(){
+  const splash = document.getElementById('splash');
+  if(!splash) return;
+  splash.style.opacity = '0';
+  setTimeout(() => { splash.style.display = 'none'; }, 520);
+}
+
 function bootApp(){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='block';
+  hideSplash();
   gotoTab('home');
   playSound('login');
   
@@ -1132,5 +1140,8 @@ function bootApp(){
     if (res.success) BANNED_WORDS_LIST = res.words || [];
   });
 }
+
+// Nascondi la splash dopo 1.5s in ogni caso (fallback se utente non è loggato)
+setTimeout(() => { hideSplash(); }, 1500);
 
 if(CUR){ bootApp(); }
