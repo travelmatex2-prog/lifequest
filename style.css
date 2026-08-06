@@ -247,3 +247,23 @@ textarea.sm{resize:vertical;min-height:68px;line-height:1.5}
 .challenge-title{font-size:14px;font-weight:700;flex:1}
 .challenge-meta{font-size:11px;color:var(--text2);margin-bottom:10px;line-height:1.6}
 .challenge-footer{display:flex;align-items:center;justify-content:space-between}
+/* ── MODALI ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.modal-overlay.open{display:flex}
+.modal-box{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:20px;max-height:92vh;overflow-y:auto;animation:slideUp 0.28s cubic-bezier(0.34,1.56,0.64,1)}
+@keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 16px}
+.modal-title{font-size:18px;font-weight:800;letter-spacing:-0.4px;margin-bottom:16px}
+
+/* ── LOADING OVERLAY ── */
+.loading-box{background:var(--card);border-radius:var(--r);padding:24px 32px;display:flex;flex-direction:column;align-items:center;gap:14px;font-size:13px;color:var(--text2);font-weight:600}
+#loading-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:800;display:none;align-items:center;justify-content:center}
+.loading-spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
+
+/* ── XP FLOAT ── */
+.xp-float{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:22px;font-weight:900;color:var(--gold,#f5c842);pointer-events:none;z-index:9999;animation:xpFloat 1.2s ease-out forwards}
+@keyframes xpFloat{0%{opacity:1;transform:translate(-50%,-50%)}100%{opacity:0;transform:translate(-50%,-130%)}}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--card2);color:var(--text);padding:10px 18px;border-radius:20px;font-size:13px;font-weight:600;z-index:9000;opacity:0;transition:opacity 0.3s;pointer-events:none;border:1px solid var(--border2);white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
+#toast.show{opacity:1}
