@@ -1130,9 +1130,9 @@ function hideSplash(){
 }
 
 function bootApp(){
-  document.getElementById('auth-screen').style.display='none';
-  document.getElementById('app').style.display='block';
   hideSplash();
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
   gotoTab('home');
   playSound('login');
   
@@ -1141,7 +1141,9 @@ function bootApp(){
   });
 }
 
-// Nascondi la splash dopo 1.5s in ogni caso (fallback se utente non è loggato)
-setTimeout(() => { hideSplash(); }, 1500);
-
-if(CUR){ bootApp(); }
+// Avvia dopo che il DOM è completamente caricato
+document.addEventListener('DOMContentLoaded', function() {
+  // Nascondi splash dopo 1.5s in ogni caso (fallback per utenti non loggati)
+  setTimeout(hideSplash, 1500);
+  if(CUR){ bootApp(); }
+});
