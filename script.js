@@ -151,7 +151,7 @@ function buildUserPayload(u){
     level: u.level || 1, streak_days: u.streak_days || 0,
     last_active: u.last_active || today(), public_profile: !!u.public_profile,
     stats: u.stats || {}, languages: u.languages || [],
-    avatar_url: u.avatar || '', privacy: u.privacy || {},
+    avatar_url: u.avatar_url || u.avatar || '', privacy: u.privacy || {},
     trophies: u.trophies || [],
     following: u.following || [],
     followers: u.followers || {}
@@ -224,10 +224,19 @@ async function doRegister(){
   const password_hash=await hashStr(pass+'lq_salt_v2');
   const pin_hash=await hashStr(pin+'lq_pin_v2');
   err.textContent='Registrazione in corso...';
+  showLoading('Creazione personaggio...');
   const result=await apiCall('REGISTER_USER',{username:user,password_hash,pin_hash});
+  hideLoading();
   if(result.success){
-const u={id:result.user_id,username:user,password_hash,pin_hash,xp_total:0,level:1,streak_days:0,last_active:today(),public_profile:true,avatar:'',languages:[],stats:{mente:0,corpo:0,cultura:0,sociale:0,'produttivita':0,sfide:0},trophies:[],privacy:{},following:[],followers:{}};  }else err.textContent=result.message||'Errore di registrazione';
-}
+    const u={id:result.user_id,username:user,password_hash,pin_hash,xp_total:0,level:1,streak_days:0,last_active:today(),public_profile:true,avatar:'',languages:[],stats:{mente:0,corpo:0,cultura:0,sociale:0,'produttivita':0,sfide:0},trophies:[],privacy:{},following:[],followers:{}};
+    DB.users.push(u);
+    saveDB();
+    syncCUR(u);
+    bootApp();
+    err.textContent='';
+  }else{
+    err.textContent=result.message||'Errore di registrazione';
+  }
 
 async function doLogin(){
   const user=document.getElementById('l-user').value.trim();
@@ -253,7 +262,7 @@ async function doLogin(){
         // [PATCH V3] Usa following/followers dal cloud (più aggiornato), fallback al locale
         cu.following = (cu.following && cu.following.length) ? cu.following : (local.following||[]);
         cu.followers = (cu.followers && Object.keys(cu.followers).length) ? cu.followers : (local.followers||{});
-        cu.avatar=local.avatar||cu.avatar||''; cu.languages=cu.languages?.length?cu.languages:(local.languages||[]);
+        cu.avatar=local.avatar||cu.avatar_url||cu.avatar||''; cu.languages=cu.languages?.length?cu.languages:(local.languages||[]);
 
 
         
@@ -261,14 +270,14 @@ async function doLogin(){
         DB.users[DB.users.indexOf(local)]=cu;
       }else{
         cu.trophies=[];cu.privacy={};cu.following=cu.following||[];cu.followers=cu.followers||{};
-        cu.avatar=cu.avatar||''; cu.languages=cu.languages||[];
+        cu.avatar=cu.avatar_url||cu.avatar||''; cu.languages=cu.languages||[];
         DB.users.push(cu);
       }
       saveDB();syncCUR(cu);bootApp();err.textContent='';
     }else{
-      const local=DB.users.find(u=>u.username.toLowerCase()===user.toLowerCase()&&u.password_hash===password_hash);
+      const local=DB.users.find(u=>u.username&&u.username.toLowerCase()===user.toLowerCase()&&u.password_hash===password_hash);
       if(local){syncCUR(local);bootApp();showToast('⚠️ Offline: dati locali');}
-      else err.textContent=result.message||'Credenziali errate';
+      else err.textContent=(result.message||'Credenziali errate')+'. Se hai cambiato dispositivo, riprova o usa il PIN di recupero.';
     }
   }catch(e){hideLoading();err.textContent='Errore di connessione';}
 }
@@ -1430,7 +1439,9 @@ function bootApp(){
 
 // Avvia dopo che il DOM è completamente caricato
 document.addEventListener('DOMContentLoaded', function() {
-  // Nascondi splash dopo 1.5s in ogni caso (fallback per utenti non loggati)
   setTimeout(hideSplash, 1500);
-  if(CUR){ bootApp(); }
+  if(CUR){
+    try{ bootApp(); }
+    catch(e){ console.error('bootApp error:',e); CUR=null; hideSplash(); }
+  }
 });
