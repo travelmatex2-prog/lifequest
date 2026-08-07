@@ -2,14 +2,13 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,viewport-fit=cover">
 <title>LifeQuest</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  
-<!-- SPLASH SCREEN (Patch 12) -->
+<!-- SPLASH SCREEN -->
 <div id="splash" style="position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.5s">
   <div style="font-size:52px;font-weight:900;letter-spacing:-3px;background:linear-gradient(135deg,#7c6af7,#3dcff5,#f5c842);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:pulse 1s ease-in-out infinite">LifeQuest</div>
   <div style="font-size:13px;color:var(--text3);margin-top:8px">Il tuo mondo. Come un gioco di ruolo.</div>
@@ -41,201 +40,185 @@
 
 <!-- APP -->
 <div id="app" style="display:none">
-<div id="main-content">
 
-<!-- HOME -->
-<div id="screen-home" class="screen active">
-  <div class="xp-hero">
-    <div class="xp-top">
-      <div class="level-badge" id="hd-level">1</div>
-      <div class="xp-info">
-        <div class="xp-name" id="hd-name">Eroe</div>
-        <div class="xp-title-rank" id="hd-rank">Novizio · Lv.1</div>
+  <!-- CONTENUTO SCROLLABILE -->
+  <div id="main-content">
+
+    <!-- HOME -->
+    <div id="screen-home" class="screen active">
+      <div class="xp-hero">
+        <div class="xp-top">
+          <div class="level-badge" id="hd-level">1</div>
+          <div class="xp-info">
+            <div class="xp-name" id="hd-name">Eroe</div>
+            <div class="xp-title-rank" id="hd-rank">Novizio · Lv.1</div>
+          </div>
+          <div id="hd-avatar" class="hd-avatar-wrap" onclick="gotoTab('stats')"><span>?</span></div>
+          <div class="streak-badge" id="hd-streak">🔥 0 gg</div>
+        </div>
+        <div class="xp-bar-wrap"><div class="xp-bar-fill" id="xp-bar" style="width:0%"></div></div>
+        <div class="xp-nums"><span id="xp-cur">0 XP</span><span id="xp-next">→ Lv.2</span></div>
+        <div class="stats-row">
+          <div class="stat-mini"><div class="stat-mini-val" id="ds-mente">0</div><div class="stat-mini-lbl">Mente</div></div>
+          <div class="stat-mini"><div class="stat-mini-val" id="ds-corpo">0</div><div class="stat-mini-lbl">Corpo</div></div>
+          <div class="stat-mini"><div class="stat-mini-val" id="ds-cultura">0</div><div class="stat-mini-lbl">Cultura</div></div>
+          <div class="stat-mini"><div class="stat-mini-val" id="ds-sociale">0</div><div class="stat-mini-lbl">Sociale</div></div>
+          <div class="stat-mini"><div class="stat-mini-val" id="ds-sfide">0</div><div class="stat-mini-lbl">Sfide</div></div>
+        </div>
       </div>
-      <div id="hd-avatar" class="hd-avatar-wrap" onclick="gotoTab('stats')"><span>?</span></div>
-      <div class="streak-badge" id="hd-streak">🔥 0 gg</div>
-    </div>
-    <div class="xp-bar-wrap"><div class="xp-bar-fill" id="xp-bar" style="width:0%"></div></div>
-    <div class="xp-nums"><span id="xp-cur">0 XP</span><span id="xp-next">→ Lv.2</span></div>
-    <div class="stats-row">
-      <div class="stat-mini"><div class="stat-mini-val" id="ds-mente">0</div><div class="stat-mini-lbl">Mente</div></div>
-      <div class="stat-mini"><div class="stat-mini-val" id="ds-corpo">0</div><div class="stat-mini-lbl">Corpo</div></div>
-      <div class="stat-mini"><div class="stat-mini-val" id="ds-cultura">0</div><div class="stat-mini-lbl">Cultura</div></div>
-      <div class="stat-mini"><div class="stat-mini-val" id="ds-sociale">0</div><div class="stat-mini-lbl">Sociale</div></div>
-      <div class="stat-mini"><div class="stat-mini-val" id="ds-sfide">0</div><div class="stat-mini-lbl">Sfide</div></div>
-    </div>
-  </div>
-  <div class="section" style="padding-top:12px">
-    <div class="motiv-card">
-      <div class="motiv-text" id="motiv-text"></div>
-      <div class="motiv-badge">🌟 Messaggio del giorno</div>
-    </div>
-    <!-- FEED SWITCH -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span class="section-title">Feed</span>
-
-
-
-
-      
-     <div style="display:flex;align-items:center;gap:8px">
-  <span style="font-size:11px;color:var(--text3)">Seguiti</span>
-  <div class="toggle-track" id="feed-switch-track" onclick="toggleFeedMode()"><div class="toggle-knob"></div></div>
-  <span style="font-size:11px;color:var(--text3)">Tutti</span>
-</div>
-
-
-        
+      <div class="section" style="padding-top:12px">
+        <div class="motiv-card">
+          <div class="motiv-text" id="motiv-text"></div>
+          <div class="motiv-badge">🌟 Messaggio del giorno</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span class="section-title">Feed</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;color:var(--text3)">Seguiti</span>
+            <div class="toggle-track" id="feed-switch-track" onclick="toggleFeedMode()"><div class="toggle-knob"></div></div>
+            <span style="font-size:11px;color:var(--text3)">Tutti</span>
+          </div>
+        </div>
+        <div id="feed-list"></div>
       </div>
-    </div>
-    <div id="feed-list"></div>
-  </div>
-</div>
+    </div><!-- /screen-home -->
 
-<!-- QUEST -->
-<div id="screen-quest" class="screen">
+    <!-- QUEST -->
+    <div id="screen-quest" class="screen">
+      <div class="screen-header">
+        <div class="screen-title">⚔️ <span>Quest</span></div>
+        <button class="btn-sm btn-sm-primary" onclick="openAddQuestModal()">+ Quest</button>
+      </div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchQuestTab('todo')">To-Do</button>
+        <button class="tab" onclick="switchQuestTab('active')">Obiettivi</button>
+        <button class="tab" onclick="switchQuestTab('done')">✅ Fatte</button>
+        <button class="tab" onclick="switchQuestTab('calendar')">📅</button>
+      </div>
+      <div style="padding:0 20px 20px" id="quest-list-container"></div>
+    </div><!-- /screen-quest -->
 
+    <!-- STUDIO -->
+    <div id="screen-study" class="screen">
+      <div class="screen-header">
+        <div class="screen-title">📚 <span>Studio</span></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn-sm btn-sm-ghost" onclick="openModal('modal-add-book');playSound('open')">+ Libro</button>
+          <button class="btn-sm btn-sm-primary" onclick="openModal('modal-add-exam');playSound('open')">+ Esame</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchStudyTab('exams')">Esami</button>
+        <button class="tab" onclick="switchStudyTab('books')">Libri</button>
+        <button class="tab" onclick="switchStudyTab('sessions')">Sessioni</button>
+        <button class="tab" onclick="switchStudyTab('calendar')">Cal.</button>
+      </div>
+      <div style="padding:0 0 20px" id="study-container"></div>
+    </div><!-- /screen-study -->
 
+    <!-- ROUTINE -->
+    <div id="screen-routine" class="screen">
+      <div class="screen-header">
+        <div class="screen-title">🌱 <span>Routine</span></div>
+        <button class="btn-sm btn-sm-ghost" onclick="openCustomRoutineModal()">+ Custom</button>
+      </div>
+      <div id="routine-container"></div>
+    </div><!-- /screen-routine -->
 
-  
-  <div class="screen-header">
-    <div class="screen-title">⚔️ <span>Quest</span></div>
-    <button class="btn-sm btn-sm-primary" onclick="openAddQuestModal()">+ Quest</button>
-  </div>
+    <!-- SFIDE -->
+    <div id="screen-pvp" class="screen">
+      <div class="screen-header">
+        <div class="screen-title">⚔️ <span>Sfide</span></div>
+        <button class="btn-sm btn-sm-primary" onclick="openModal('modal-create-challenge');playSound('open')">+ Sfida</button>
+      </div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchPvpTab('active')">Attive</button>
+        <button class="tab" onclick="switchPvpTab('pending')">In attesa</button>
+        <button class="tab" onclick="switchPvpTab('history')">Storico</button>
+      </div>
+      <div style="padding:0 20px 8px" id="pvp-container"></div>
+      <div style="padding:0 20px 20px">
+        <div class="section-hd" style="margin-bottom:8px"><span class="section-title">Unisciti a sfida</span></div>
+        <div style="display:flex;gap:8px">
+          <input class="sm" id="join-code-input" placeholder="Codice numerico (es. 1001)" style="flex:1;margin:0">
+          <button class="btn-sm btn-sm-primary" onclick="joinChallenge()">Entra</button>
+        </div>
+      </div>
+    </div><!-- /screen-pvp -->
 
+    <!-- AMICI -->
+    <div id="screen-friends" class="screen">
+      <div class="screen-header">
+        <div class="screen-title">👥 <span>Social</span></div>
+      </div>
+      <div id="friends-container"></div>
+    </div><!-- /screen-friends -->
 
+    <!-- STATS -->
+    <div id="screen-stats" class="screen">
+      <div class="screen-header">
+        <div class="screen-title">📊 <span>Profilo</span></div>
+      </div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchStatsTab('stats')">Le mie</button>
+        <button class="tab" onclick="switchStatsTab('leaderboard')">Leaderboard</button>
+        <button class="tab" onclick="switchStatsTab('calendar')">📅 Cal.</button>
+      </div>
+      <div id="stats-container"></div>
+    </div><!-- /screen-stats -->
 
+  </div><!-- /main-content -->
 
+  <!-- BOTTOM NAV — fuori da main-content, dentro #app -->
+  <nav id="bottom-nav">
+    <button class="nav-btn active" id="nav-home" onclick="gotoTab('home')">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Home
+    </button>
+    <button class="nav-btn" id="nav-quest" onclick="gotoTab('quest')">
+      <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      Quest
+    </button>
+    <button class="nav-btn" id="nav-study" onclick="gotoTab('study')">
+      <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+      Studio
+    </button>
+    <button class="nav-btn" id="nav-routine" onclick="gotoTab('routine')">
+      <svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Routine
+    </button>
+    <button class="nav-btn" id="nav-pvp" onclick="gotoTab('pvp')">
+      <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Sfide
+    </button>
+    <button class="nav-btn" id="nav-friends" onclick="gotoTab('friends')">
+      <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      Social
+    </button>
+    <button class="nav-btn" id="nav-stats" onclick="gotoTab('stats')">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Profilo
+    </button>
+  </nav>
 
-  
-  <div class="tabs">
-    <button class="tab active" onclick="switchQuestTab('todo')">To-Do</button>
-    <button class="tab" onclick="switchQuestTab('active')">Obiettivi</button>
-    <button class="tab" onclick="switchQuestTab('done')">✅ Fatte</button>
-    <button class="tab" onclick="switchQuestTab('calendar')">📅</button>
-  </div>
-  <div style="padding:0 20px 20px" id="quest-list-container"></div>
-</div>
-
-<!-- STUDIO -->
-<div id="screen-study" class="screen">
-  <div class="screen-header">
-    <div class="screen-title">📚 <span>Studio</span></div>
-    <div style="display:flex;gap:6px">
-      <button class="btn-sm btn-sm-ghost" onclick="openModal('modal-add-book');playSound('open')">+ Libro</button>
-      <button class="btn-sm btn-sm-primary" onclick="openModal('modal-add-exam');playSound('open')">+ Esame</button>
-    </div>
-  </div>
-  <div class="tabs">
-    <button class="tab active" onclick="switchStudyTab('exams')">Esami</button>
-    <button class="tab" onclick="switchStudyTab('books')">Libri</button>
-    <button class="tab" onclick="switchStudyTab('sessions')">Sessioni</button>
-    <button class="tab" onclick="switchStudyTab('calendar')">Cal.</button>
-  </div>
-  <div style="padding:0 0 20px" id="study-container"></div>
-</div>
-
-<!-- ROUTINE -->
-<div id="screen-routine" class="screen">
-  <div class="screen-header">
-    <div class="screen-title">🌱 <span>Routine</span></div>
-    <button class="btn-sm btn-sm-ghost" onclick="openCustomRoutineModal()">+ Custom</button>
-  </div>
-  <div id="routine-container"></div>
-</div>
-
-<!-- SFIDE -->
-<div id="screen-pvp" class="screen">
-  <div class="screen-header">
-    <div class="screen-title">⚔️ <span>Sfide</span></div>
-    <button class="btn-sm btn-sm-primary" onclick="openModal('modal-create-challenge');playSound('open')">+ Sfida</button>
-  </div>
-  <div class="tabs">
-    <button class="tab active" onclick="switchPvpTab('active')">Attive</button>
-    <button class="tab" onclick="switchPvpTab('pending')">In attesa</button>
-    <button class="tab" onclick="switchPvpTab('history')">Storico</button>
-  </div>
-  <div style="padding:0 20px 8px" id="pvp-container"></div>
-  <div style="padding:0 20px 20px">
-    <div class="section-hd" style="margin-bottom:8px"><span class="section-title">Unisciti a sfida</span></div>
-    <div style="display:flex;gap:8px">
-      <input class="sm" id="join-code-input" placeholder="Codice numerico (es. 1001)" style="flex:1;margin:0">
-      <button class="btn-sm btn-sm-primary" onclick="joinChallenge()">Entra</button>
-    </div>
-  </div>
-</div>
-
-<!-- AMICI -->
-<div id="screen-friends" class="screen">
-  <div class="screen-header">
-    <div class="screen-title">👥 <span>Social</span></div>
-  </div>
-  <div id="friends-container"></div>
-</div>
-
-<!-- STATS -->
-<div id="screen-stats" class="screen">
-  <div class="screen-header">
-    <div class="screen-title">📊 <span>Profilo</span></div>
-  </div>
-  <div class="tabs">
-    <button class="tab active" onclick="switchStatsTab('stats')">Le mie</button>
-    <button class="tab" onclick="switchStatsTab('leaderboard')">Leaderboard</button>
-    <button class="tab" onclick="switchStatsTab('calendar')">📅 Cal.</button>
-  </div>
-  <div id="stats-container"></div>
-</div>
-
-</div><!-- /main-content -->
-
-<!-- NAV -->
-<nav id="bottom-nav">
-  <button class="nav-btn active" id="nav-home" onclick="gotoTab('home')">
-    <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
-  </button>
-  <button class="nav-btn" id="nav-quest" onclick="gotoTab('quest')">
-    <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Quest
-  </button>
-  <button class="nav-btn" id="nav-study" onclick="gotoTab('study')">
-    <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>Studio
-  </button>
-  <button class="nav-btn" id="nav-routine" onclick="gotoTab('routine')">
-    <svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Routine
-  </button>
-  <button class="nav-btn" id="nav-pvp" onclick="gotoTab('pvp')">
-    <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>Sfide
-  </button>
-
-
-  
- <button class="nav-btn" id="nav-friends" onclick="gotoTab('friends')">
-    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Social
-  </button>
-
-
-  
-  <button class="nav-btn" id="nav-stats" onclick="gotoTab('stats')">
-    <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Profilo
-  </button>
-</nav>
 </div><!-- /app -->
 
 <!-- TOAST -->
 <div id="toast"></div>
 
-<!-- AUDIO ELEMENTS -->
-<audio id="snd-tap" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" preload="auto"></audio>
-<audio id="snd-xp" src="https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3" preload="auto"></audio>
-<audio id="snd-levelup" src="https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3" preload="auto"></audio>
-<audio id="snd-trophy" src="https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3" preload="auto"></audio>
-<audio id="snd-like" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" preload="auto"></audio>
-<audio id="snd-error" src="https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3" preload="auto"></audio>
-<audio id="snd-open" src="https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3" preload="auto"></audio>
-<audio id="snd-quest" src="https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3" preload="auto"></audio>
+<!-- AUDIO -->
+<audio id="snd-tap"       src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" preload="auto"></audio>
+<audio id="snd-xp"        src="https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3" preload="auto"></audio>
+<audio id="snd-levelup"   src="https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3" preload="auto"></audio>
+<audio id="snd-trophy"    src="https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3" preload="auto"></audio>
+<audio id="snd-like"      src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" preload="auto"></audio>
+<audio id="snd-error"     src="https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3" preload="auto"></audio>
+<audio id="snd-open"      src="https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3" preload="auto"></audio>
+<audio id="snd-quest"     src="https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3" preload="auto"></audio>
 <audio id="snd-challenge" src="https://assets.mixkit.co/active_storage/sfx/2188/2188-preview.mp3" preload="auto"></audio>
-<audio id="snd-login" src="https://assets.mixkit.co/active_storage/sfx/1434/1434-preview.mp3" preload="auto"></audio>
+<audio id="snd-login"     src="https://assets.mixkit.co/active_storage/sfx/1434/1434-preview.mp3" preload="auto"></audio>
 
-<!-- MODALI DI SISTEMA -->
+<!-- MODALI -->
 <div id="modal-pin-reset" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-pin-reset')">
   <div class="modal-box">
     <div class="modal-handle"></div>
@@ -287,10 +270,14 @@
 </div>
 
 <div id="modal-add-book" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-add-book')">
-  <div class="modal-box" style="max-height:90vh;overflow-y:auto">
+  <div class="modal-box">
     <div class="modal-handle"></div>
     <div class="modal-title">Aggiungi Libro</div>
-    <div class="field" style="position:relative"><label>TITOLO</label><input type="text" id="bk-title" placeholder="es. Atomic Habits" oninput="onBookTitleInput()"><div id="book-suggestions" class="suggestions-dropdown" style="display:none"></div></div>
+    <div class="field" style="position:relative">
+      <label>TITOLO</label>
+      <input type="text" id="bk-title" placeholder="es. Atomic Habits" oninput="onBookTitleInput()">
+      <div id="book-suggestions" class="suggestions-dropdown" style="display:none"></div>
+    </div>
     <div class="field"><label>AUTORE</label><input type="text" id="bk-author" placeholder="es. James Clear"></div>
     <div class="field"><label>GENERE</label>
       <select id="bk-genre" class="sm">
@@ -395,7 +382,7 @@
 </div>
 
 <div id="modal-create-challenge" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-create-challenge')">
-  <div class="modal-box" style="max-height:90vh;overflow-y:auto">
+  <div class="modal-box">
     <div class="modal-handle"></div>
     <div class="modal-title">Crea Nuova Sfida PvP</div>
     <div class="field"><label>TIPO</label>
@@ -409,13 +396,10 @@
     <div class="field"><label>DESCRIZIONE</label><textarea id="pvp-desc" class="sm" placeholder="Regole generali..."></textarea></div>
     <div class="field"><label>XP IN PALIO (STAKE)</label><input type="number" id="pvp-stake" value="20" min="5" max="20"></div>
     <div class="field"><label>SCADENZA</label><input type="date" id="pvp-deadline" class="sm"></div>
-    
-    <!-- [PATCH 7c] Toggle Pubblica Sfida -->
-    <div class="visibility-toggle" style="margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <div class="toggle-track" id="pvp-public" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
-      <span class="toggle-label" style="font-size:12px;color:var(--text2)">Pubblica nel feed (tutti possono accettare)</span>
+      <span style="font-size:12px;color:var(--text2)">Pubblica nel feed (tutti possono accettare)</span>
     </div>
-
     <div class="field">
       <label class="input-label">REGOLE AGGIUNTIVE</label>
       <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
@@ -451,8 +435,8 @@
     <input type="hidden" id="win-challenge-id">
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
       <button class="btn btn-primary" onclick="declareWinner('me')">🏆 Ho vinto io</button>
-      <button class="btn btn-sm btn-sm-ghost" onclick="declareWinner('opp')">Avversario ha vinto</button>
-      <button class="btn btn-sm btn-sm-ghost" onclick="declareWinner('draw')">🤝 Pareggio</button>
+      <button class="btn btn-sm btn-sm-ghost" style="padding:13px" onclick="declareWinner('opp')">Avversario ha vinto</button>
+      <button class="btn btn-sm btn-sm-ghost" style="padding:13px" onclick="declareWinner('draw')">🤝 Pareggio</button>
     </div>
   </div>
 </div>
@@ -472,7 +456,7 @@
     <div class="modal-handle"></div>
     <div class="modal-title">Lingue parlate</div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Seleziona le lingue che parli per filtrare il feed globale.</div>
-    <div id="nations-grid" class="nations-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px"></div>
+    <div id="nations-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px"></div>
     <button class="btn btn-primary" onclick="saveLanguages()">Salva Lingue</button>
   </div>
 </div>
