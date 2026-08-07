@@ -226,6 +226,9 @@ async function doRegister(){
   err.textContent='Registrazione in corso...';
   showLoading('Creazione personaggio...');
   const result=await apiCall('REGISTER_USER',{username:user,password_hash,pin_hash});
+
+
+  
   hideLoading();
   if(result.success){
     const u={id:result.user_id,username:user,password_hash,pin_hash,xp_total:0,level:1,streak_days:0,last_active:today(),public_profile:true,avatar:'',languages:[],stats:{mente:0,corpo:0,cultura:0,sociale:0,'produttivita':0,sfide:0},trophies:[],privacy:{},following:[],followers:{}};
@@ -237,7 +240,7 @@ async function doRegister(){
   }else{
     err.textContent=result.message||'Errore di registrazione';
   }
-
+}  
 async function doLogin(){
   const user=document.getElementById('l-user').value.trim();
   const pass=document.getElementById('l-pass').value;
