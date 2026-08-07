@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════
-//  LIFEQUEST — script.js — PATCH COMPLETA BUG-FREE v13
+//  LIFEQUEST — script.js AGGIORNATO CON PATCH 7, 8, 9, 10, 11 & 12
 // ══════════════════════════════════════════════════════════════
 
 const API_URL = "https://script.google.com/macros/s/AKfycbyTQTyoQIdh8PXmLHKTkyR7z28BRnsQM7XtMfsypyb4Tq0RHHTRFtNvysOft_ClX_4hzw/exec";
@@ -13,16 +13,16 @@ const DIFF_MULT = [1,1,1.15,1.3,1.5,1.7];
 const CAT_STAT  = {mente:'mente',corpo:'corpo',cultura:'cultura',sociale:'sociale','produttivita':'produttivita',athletic:'corpo',mental:'mente',mixed:'mente',altro:'produttivita',sfide:'sfide'};
 const STAT_COLORS = {mente:'#7c6af7',corpo:'#3de89a',cultura:'#f5c842',sociale:'#ff6eb4','produttivita':'#3dcff5',sfide:'#ff5e7a'};
 const MOTIVS = [
-  'Ogni grande impresa inizia con un primo passo.',
+  'Ogni grande impresa inizia con un primo passo. ',
   'La costanza batte il talento quando il talento non si impegna.',
-  'Un giorno da guerriero vale più di mille da spettatore. ⚔️',
+  'Un giorno da guerriero vale piu di mille da spettatore. ⚔️',
   'Non contare i giorni — fai contare i giorni.',
-  'La disciplina è scegliere tra ciò che vuoi adesso e ciò che vuoi di più.',
-  'Il successo è la somma di piccoli sforzi ripetuti ogni giorno.',
-  'Il momento perfetto per iniziare era ieri. Il secondo migliore è adesso.',
-  'Non esiste talento, solo dedizione mascherata da genio.',
-  'Un capitolo al giorno teniamo l\'ignoranza lontano.',
-  'La sofferenza di oggi è la forza di domani.'
+  'La disciplina e scegliere tra cio che vuoi adesso e cio che vuoi di piu.',
+  'Il successo e la somma di piccoli sforzi ripetuti ogni giorno.',
+  'Il momento perfetto per iniziare era ieri. Il secondo migliore e adesso.',
+  'Non esiste talento, solo dedizione mascherata da genio. ',
+  'Un capitolo al giorno teniamo l ignoranza lontano. ',
+  'La sofferenza di oggi e la forza di domani. '
 ];
 const ROUTINE_ITEMS = [
   {id:'meditation',name:'Meditazione',emoji:'🧘',cat:'mente',xp:30},
@@ -50,7 +50,7 @@ function loadDB(){try{return JSON.parse(localStorage.getItem(DB_KEY))||mkDB();}c
 function saveDB(){try{localStorage.setItem(DB_KEY,JSON.stringify(DB));}catch(e){}}
 let DB=loadDB();
 let CUR=null;
-let BANNED_WORDS_LIST = [];
+let BANNED_WORDS_LIST = []; 
 
 try{
   CUR=JSON.parse(localStorage.getItem('lq_cur_v5')||localStorage.getItem('lq_cur_v4')||localStorage.getItem('lq_cur_v3')||localStorage.getItem('lq_cur_v2')||'null');
@@ -161,7 +161,7 @@ function buildUserPayload(u){
 function awardXP(amount,stat,note){
   if(!CUR)return 0;
   const u=getUser(CUR.id);if(!u)return 0;
-  const oldLevel = u.level || 1;
+  const oldLevel = u.level || 1; 
   const xp=Math.max(1,Math.round(amount*streakMult(u)));
   u.xp_total=(u.xp_total||0)+xp;
   u.level=calcLevel(u.xp_total);
@@ -171,7 +171,9 @@ function awardXP(amount,stat,note){
   saveDB();syncCUR(u);
   showToast('+'+xp+' XP ✨ '+(note||''));
   spawnXPFloat(xp);
+  
   if (u.level > oldLevel) { playSound('levelup'); } else { playSound('xp'); }
+
   apiCall('SYNC_USER_DATA',buildUserPayload(u));
   updateDashboard();
   return xp;
@@ -224,6 +226,9 @@ async function doRegister(){
   err.textContent='Registrazione in corso...';
   showLoading('Creazione personaggio...');
   const result=await apiCall('REGISTER_USER',{username:user,password_hash,pin_hash});
+
+
+  
   hideLoading();
   if(result.success){
     const u={id:result.user_id,username:user,password_hash,pin_hash,xp_total:0,level:1,streak_days:0,last_active:today(),public_profile:true,avatar:'',languages:[],stats:{mente:0,corpo:0,cultura:0,sociale:0,'produttivita':0,sfide:0},trophies:[],privacy:{},following:[],followers:{}};
@@ -235,93 +240,7 @@ async function doRegister(){
   }else{
     err.textContent=result.message||'Errore di registrazione';
   }
-}
-
-// ══════════════════════════════════════════════════════════════
-//  PULL DATI CLOUD AL LOGIN — ricarica tutto dal server
-// ══════════════════════════════════════════════════════════════
-async function pullCloudData(userId) {
-  try {
-    // 1) Quests
-    const qRes = await apiCall('GET_USER_QUESTS', { user_id: userId });
-    if (qRes.success && Array.isArray(qRes.quests)) {
-      qRes.quests.forEach(q => {
-        const ex = DB.quests.find(x => x.id === q.id);
-        if (ex) Object.assign(ex, q);
-        else DB.quests.push(q);
-      });
-    }
-
-    // 2) Books
-    const bRes = await apiCall('GET_USER_BOOKS', { user_id: userId });
-    if (bRes.success && Array.isArray(bRes.books)) {
-      bRes.books.forEach(b => {
-        const ex = DB.books.find(x => x.id === b.id);
-        if (ex) Object.assign(ex, b);
-        else DB.books.push(b);
-      });
-    }
-
-    // 3) Book sessions
-    const bsRes = await apiCall('GET_USER_BOOK_SESSIONS', { user_id: userId });
-    if (bsRes.success && Array.isArray(bsRes.sessions)) {
-      bsRes.sessions.forEach(s => {
-        if (!DB.book_sessions.find(x => x.id === s.id)) DB.book_sessions.push(s);
-      });
-    }
-
-    // 4) Study sessions
-    const ssRes = await apiCall('GET_USER_STUDY_SESSIONS', { user_id: userId });
-    if (ssRes.success && Array.isArray(ssRes.sessions)) {
-      ssRes.sessions.forEach(s => {
-        if (!DB.sessions.find(x => x.id === s.id)) DB.sessions.push(s);
-      });
-    }
-
-    // 5) Exams
-    const exRes = await apiCall('GET_USER_EXAMS', { user_id: userId });
-    if (exRes.success && Array.isArray(exRes.exams)) {
-      exRes.exams.forEach(e => {
-        const ex = DB.exams.find(x => x.id === e.id);
-        if (ex) Object.assign(ex, e);
-        else DB.exams.push(e);
-      });
-    }
-
-    // 6) Challenges
-    const chRes = await apiCall('GET_CHALLENGES', { user_id: userId });
-    if (chRes.success && Array.isArray(chRes.challenges)) {
-      chRes.challenges.forEach(ch => {
-        const ex = DB.challenges.find(x => x.id === ch.id);
-        if (ex) Object.assign(ex, ch);
-        else DB.challenges.push(ch);
-      });
-    }
-
-    // 7) Following users info (per mostrare username correttamente)
-    const u = getUser(userId);
-    if (u && u.following && u.following.length) {
-      const fuRes = await apiCall('GET_USERS_BY_IDS', { ids: u.following });
-      if (fuRes.success && Array.isArray(fuRes.users)) {
-        fuRes.users.forEach(fu => {
-          const ex = DB.users.find(x => x.id === fu.id);
-          if (ex) {
-            ex.username = fu.username || ex.username;
-            ex.level = fu.level || ex.level;
-            ex.avatar = fu.avatar_url || fu.avatar || ex.avatar || '';
-          } else {
-            DB.users.push({ ...fu, avatar: fu.avatar_url || fu.avatar || '' });
-          }
-        });
-      }
-    }
-
-    saveDB();
-  } catch(e) {
-    console.warn('pullCloudData error:', e);
-  }
-}
-
+}  
 async function doLogin(){
   const user=document.getElementById('l-user').value.trim();
   const pass=document.getElementById('l-pass').value;
@@ -331,101 +250,39 @@ async function doLogin(){
   err.textContent='Accesso in corso...';showLoading('Login...');
   try{
     const result=await apiCall('LOGIN_USER',{username:user,password_hash});
+    hideLoading();
     if(result.success&&result.user){
       const cu=result.user;
       let local=DB.users.find(u=>u.id===cu.id);
       if(local){
-        // Prendi il massimo tra locale e cloud per XP/livello/streak
         cu.xp_total=Math.max(local.xp_total||0,cu.xp_total||0);
         cu.level=Math.max(local.level||1,cu.level||1);
         cu.streak_days=Math.max(local.streak_days||0,cu.streak_days||0);
-        cu.trophies=cu.trophies?.length ? cu.trophies : (local.trophies||[]);
-        cu.privacy=cu.privacy||local.privacy||{};
-        // Following/followers: cloud è sempre più aggiornato
+
+
+        
+         cu.trophies=local.trophies||[];cu.privacy=local.privacy||{};
+        // [PATCH V3] Usa following/followers dal cloud (più aggiornato), fallback al locale
         cu.following = (cu.following && cu.following.length) ? cu.following : (local.following||[]);
         cu.followers = (cu.followers && Object.keys(cu.followers).length) ? cu.followers : (local.followers||{});
-        cu.avatar=local.avatar||cu.avatar_url||cu.avatar||'';
-        cu.languages=cu.languages?.length?cu.languages:(local.languages||[]);
-        if(cu.stats) {
-          Object.keys(local.stats||{}).forEach(k=>{
-            cu.stats[k]=Math.max(cu.stats[k]||0,local.stats[k]||0);
-          });
-        }
+        cu.avatar=local.avatar||cu.avatar_url||cu.avatar||''; cu.languages=cu.languages?.length?cu.languages:(local.languages||[]);
+
+
+        
+        if(cu.stats)Object.keys(local.stats||{}).forEach(k=>{cu.stats[k]=Math.max(cu.stats[k]||0,local.stats[k]||0);});
         DB.users[DB.users.indexOf(local)]=cu;
       }else{
-        cu.trophies=cu.trophies||[];
-        cu.privacy={};
-        cu.following=cu.following||[];
-        cu.followers=cu.followers||{};
-        cu.avatar=cu.avatar_url||cu.avatar||'';
-        cu.languages=cu.languages||[];
+        cu.trophies=[];cu.privacy={};cu.following=cu.following||[];cu.followers=cu.followers||{};
+        cu.avatar=cu.avatar_url||cu.avatar||''; cu.languages=cu.languages||[];
         DB.users.push(cu);
       }
-      saveDB();syncCUR(cu);
-
-      // Sincronizza dati cloud in background
-      showLoading('Sincronizzazione dati...');
-      await pullCloudData(cu.id);
-      hideLoading();
-
-      bootApp();err.textContent='';
+      saveDB();syncCUR(cu);bootApp();err.textContent='';
     }else{
-      hideLoading();
       const local=DB.users.find(u=>u.username&&u.username.toLowerCase()===user.toLowerCase()&&u.password_hash===password_hash);
       if(local){syncCUR(local);bootApp();showToast('⚠️ Offline: dati locali');}
       else err.textContent=(result.message||'Credenziali errate')+'. Se hai cambiato dispositivo, riprova o usa il PIN di recupero.';
     }
   }catch(e){hideLoading();err.textContent='Errore di connessione';}
-}
-
-async function doResetPin(){
-  const user=document.getElementById('pr-user').value.trim();
-  const pin=document.getElementById('pr-pin').value.trim();
-  const newpass=document.getElementById('pr-newpass').value;
-  const err=document.getElementById('pr-error');
-  if(!user||!pin||!newpass){err.textContent='Compila tutti i campi';return;}
-  if(!/^\d{4}$/.test(pin)){err.textContent='PIN: 4 cifre numeriche';return;}
-  if(newpass.length<6){err.textContent='Password min 6 caratteri';return;}
-  const pin_hash=await hashStr(pin+'lq_pin_v2');
-  const password_hash=await hashStr(newpass+'lq_salt_v2');
-  showLoading('Reset password...');
-  const res=await apiCall('RESET_PASSWORD',{username:user,pin_hash,new_password_hash:password_hash});
-  hideLoading();
-  if(res.success){
-    err.textContent='';
-    closeModal('modal-pin-reset');
-    showToast('✅ Password reimpostata! Accedi ora.');
-  } else {
-    err.textContent=res.message||'Errore reset password';
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-//  REFRESH MANUALE
-// ══════════════════════════════════════════════════════════════
-async function refreshApp() {
-  if (!CUR) return;
-  playSound('tap');
-  showLoading('Aggiornamento dati...');
-  try {
-    // Aggiorna profilo utente
-    const result = await apiCall('LOGIN_USER', { user_id: CUR.id, skip_password: true });
-    // Sincronizza tutti i dati
-    await pullCloudData(CUR.id);
-    // Ricarica feed
-    _feedCache = [];
-    await loadAndRenderFeed();
-  } catch(e) {
-    console.warn('refresh error', e);
-  }
-  hideLoading();
-  // Re-render schermata attuale
-  const activeScreen = document.querySelector('.screen.active');
-  if (activeScreen) {
-    const tab = activeScreen.id.replace('screen-','');
-    ({home:renderHome,quest:renderQuests,study:renderStudy,routine:renderRoutine,pvp:renderPvP_load,stats:renderStats,friends:renderFriendsScreen}[tab]||function(){})();
-  }
-  showToast('✅ Dati aggiornati!');
 }
 
 function gotoTab(tab){
@@ -456,11 +313,15 @@ function updateDashboard(){
   ['mente','corpo','cultura','sociale','sfide'].forEach(k=>{const el=document.getElementById('ds-'+k);if(el)el.textContent=s[k]||0;});
 }
 
+
+
 function renderHome(){
   updateDashboard();
   document.getElementById('motiv-text').textContent=MOTIVS[new Date().getDay()%MOTIVS.length];
   loadAndRenderFeed();
 }
+
+
 
 let feedMode='following';
 let _feedCache=[];
@@ -485,20 +346,18 @@ async function loadAndRenderFeed(){
     });
     hideLoading();
     if(res.success && res.posts){
+      // Merge con post locali non ancora sincronizzati (presenti solo in DB.feed_posts)
       const cloudIds=new Set(res.posts.map(p=>p.id));
       const localOnly=DB.feed_posts.filter(p=>!cloudIds.has(p.id));
       _feedCache=[...res.posts,...localOnly].sort((a,b)=>b.ts-a.ts);
+      // Aggiorna anche i post locali con quelli cloud per coerenza
       res.posts.forEach(cp=>{
         const existing=DB.feed_posts.find(p=>p.id===cp.id);
         if(!existing) DB.feed_posts.unshift(cp);
-        else Object.assign(existing, cp);
-        // Aggiungi autore al DB locale se non presente
-        if(cp.user_id && cp.username && !getUser(cp.user_id)){
-          DB.users.push({id:cp.user_id, username:cp.username, avatar:cp.avatar_url||'', level:1, stats:{}});
-        }
       });
       saveDB();
     } else {
+      // Fallback locale
       _feedCache=[...DB.feed_posts].sort((a,b)=>b.ts-a.ts);
     }
   }catch(e){
@@ -517,6 +376,7 @@ function renderFeed(){
   if(feedMode==='following'){
     posts=posts.filter(p=>p.user_id===CUR.id||myFollowing.has(p.user_id));
   } else {
+    // modalità "Tutti": filtra per lingua se impostata
     if(myLanguages.size>0){
       posts=posts.filter(p=>{
         if(p.user_id===CUR.id)return true;
@@ -536,14 +396,12 @@ function renderFeed(){
     return;
   }
   el.innerHTML=posts.slice(0,40).map(renderFeedPost).join('');
-}
 
+}
 function renderFeedPost(p){
-  // Risolvi autore: prima dal DB locale, poi dai dati del post
   const author=getUser(p.user_id);
-  const name=author ? escHtml(author.username) : (p.username ? escHtml(p.username) : 'Utente');
-  const avatarSrc = author?.avatar || p.avatar_url || '';
-  const av=avatarSrc ? '<img src="'+avatarSrc+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">' : (name[0]||'?');
+  const name=author?escHtml(author.username):'Utente';
+  const av=author?.avatar?'<img src="'+author.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':name[0];
   const myLike=(p.likes||[]).includes(CUR.id);
   const likeCount=(p.likes||[]).length;
   const comments=DB.comments.filter(c=>c.post_id===p.id);
@@ -558,7 +416,7 @@ function renderFeedPost(p){
     +(p.notes?'<div class="feed-notes">'+escHtml(p.notes)+'</div>':'')
     +img+'</div>'
     +'<div class="feed-footer">'
-    +'<button class="feed-action'+(myLike?' liked':'\')+'" onclick="toggleLike(\''+p.id+'\')">\'+(myLike?\'❤️\':\'🤍\')+\' <span id="lc-'+p.id+'">'+likeCount+'</span></button>'
+    +'<button class="feed-action'+(myLike?' liked':'')+'" onclick="toggleLike(\''+p.id+'\')">'+(myLike?'❤️':'🤍')+' <span id="lc-'+p.id+'">'+likeCount+'</span></button>'
     +'<button class="feed-action" onclick="toggleComments(\''+p.id+'\')">💬 '+comments.length+'</button>'
     +'<span class="feed-xp">+'+(p.xp||0)+' XP</span>'
     +'</div>'
@@ -567,7 +425,6 @@ function renderFeedPost(p){
     +'<div class="comment-input-row"><input class="sm comment-input" id="ci-'+p.id+'" placeholder="Commenta..." onkeydown="if(event.key===\'Enter\')submitComment(\''+p.id+'\')"><button class="btn-sm btn-sm-primary" onclick="submitComment(\''+p.id+'\')">↑</button></div>'
     +'</div></div>';
 }
-
 function toggleLike(postId){
   playSound('like');
   const p=DB.feed_posts.find(x=>x.id===postId);if(!p)return;
@@ -578,7 +435,6 @@ function toggleLike(postId){
   const myLike=p.likes.includes(CUR.id);
   const btn=document.querySelector('#post-'+postId+' .feed-action');
   if(btn){btn.className='feed-action'+(myLike?' liked':'');btn.innerHTML=(myLike?'❤️':'🤍')+' <span id="lc-'+postId+'">'+p.likes.length+'</span>';}
-  apiCall('TOGGLE_LIKE',{post_id:postId, user_id:CUR.id});
 }
 function toggleComments(postId){
   playSound('tap');
@@ -593,7 +449,6 @@ function submitComment(postId){
     DB.comments.push(c);saveDB();inp.value='';playSound('tap');
     const cl=document.getElementById('cl-'+postId);
     if(cl)cl.innerHTML+='<div class="comment-row"><b>'+escHtml(CUR.username)+':</b> '+escHtml(text)+'</div>';
-    apiCall('SAVE_COMMENT',c);
   });
 }
 function openPhotoModal(postId){
@@ -608,6 +463,7 @@ function addFeedPost(title,category,xp,notes,photo){
   DB.feed_posts.unshift(p);
   _feedCache.unshift(p);
   saveDB();
+  // Salva post nel cloud per renderlo visibile agli altri utenti
   apiCall('SAVE_FEED_POST',p);
   return p.id;
 }
@@ -621,9 +477,9 @@ function renderQuests(){
   const list=qTab==='todo'?myQ.filter(q=>!q.completed&&q.type==='todo'):qTab==='active'?myQ.filter(q=>!q.completed&&q.type==='quest'):myQ.filter(q=>q.completed).sort((a,b)=>(b.completed_at||0)-(a.completed_at||0));
   c.innerHTML=list.length?list.map(q=>
     '<div class="quest-card">'
-    +'<div class="quest-check'+(q.completed?' done':'\')+'" onclick="toggleQuest(\''+q.id+'\',event)"></div>'
+    +'<div class="quest-check'+(q.completed?' done':'')+'" onclick="toggleQuest(\''+q.id+'\',event)"></div>'
     +'<div class="quest-body">'
-    +'<div class="quest-name'+(q.completed?' done':'\')+'">'+escHtml(q.name)+'</div>'
+    +'<div class="quest-name'+(q.completed?' done':'')+'">'+escHtml(q.name)+'</div>'
     +(q.photo?'<div style="margin:5px 0"><img src="'+q.photo+'" style="width:100%;border-radius:8px;max-height:140px;object-fit:cover"></div>':'')
     +'<div class="quest-meta"><span class="tag tag-xp">⚡'+q.xp_base+' XP</span><span class="tag tag-cat">'+q.category+'</span>'+(q.completed?'<span class="tag tag-green">✅</span>':'')+'</div>'
     +(q.notes?'<div style="font-size:11px;color:var(--text3);margin-top:4px">'+escHtml(q.notes)+'</div>':'')
@@ -659,7 +515,6 @@ function addQuest(){
     DB.quests.push(q);saveDB();closeModal('modal-add-quest');
     document.getElementById('q-name').value='';document.getElementById('q-notes').value='';_pendingQuestPhoto='';
     renderQuests();showToast('⚔️ Quest aggiunta!');playSound('tap');
-    apiCall('SAVE_QUEST', q);
   });
 }
 function deleteQuest(id,e){if(e)e.stopPropagation();playSound('tap');DB.quests=DB.quests.filter(q=>q.id!==id);saveDB();renderQuests();}
@@ -668,10 +523,10 @@ async function toggleQuest(id,e){
   const q=DB.quests.find(q=>q.id===id);if(!q||q.completed)return;
   q.completed=true;q.completed_at=ts();saveDB();
   awardXP(q.xp_base,CAT_STAT[q.category]||'produttivita','— '+q.name);
-  playSound('quest');
+  playSound('quest'); 
   addFeedPost(q.name,q.category,q.xp_base,q.notes,q.photo);
   checkTrophies();renderQuests();
-  await apiCall('COMPLETE_QUEST',{user_id:CUR.id,quest_id:q.id,name:q.name,category:q.category,difficulty:q.difficulty||1,type:q.type||'quest',notes:q.notes||'',xp_base:q.xp_base,completed_at:q.completed_at});
+  await apiCall('COMPLETE_QUEST',{user_id:CUR.id,name:q.name,category:q.category,difficulty:q.difficulty||1,type:q.type||'quest',notes:q.notes||'',xp_base:q.xp_base});
 }
 
 function openCustomRoutineModal(){openModal('modal-custom-routine');}
@@ -698,7 +553,6 @@ function doRoutine(itemId) {
   DB.quests.push(q); saveDB();
   showToast('✨ Quest aggiunta! Vai in Quest per completarla.');
   playSound('tap');
-  apiCall('SAVE_QUEST', q);
 }
 
 function renderRoutine(){
@@ -746,7 +600,6 @@ function saveCustomRoutine(){
     showToast('✨ Quest personalizzata aggiunta!');
     playSound('tap');
     renderRoutine();
-    apiCall('SAVE_QUEST', q);
   });
 }
 
@@ -771,14 +624,9 @@ function selectBookSuggestion(id){
   document.getElementById('book-suggestions').style.display='none';
   showToast('📖 Libro importato!');playSound('tap');
 }
-
-// Variabile per il filtro "Chi legge cose simili"
-let _similarUsers = [];
-let _similarFilter = '';
-
 function renderBooks(c){
   const books=DB.books.filter(b=>b.user_id===CUR.id);
-  if(!books.length){c.innerHTML='<div class="empty"><div class="empty-emoji">📖</div><div class="empty-text">Aggiungi il tuo primo libro!</div></div><div id="study-similar"></div>';renderSimilarSection();return;}
+  if(!books.length){c.innerHTML='<div class="empty"><div class="empty-emoji">📖</div><div class="empty-text">Aggiungi il tuo primo libro!</div></div><div id="study-similar"></div>';return;}
   let h = books.map(b=>{
     const pct=b.total_pages?Math.round((b.current_page||0)/b.total_pages*100):0;
     const done=(b.current_page||0)>=(b.total_pages||Infinity)&&b.total_pages>0;
@@ -798,69 +646,15 @@ function renderBooks(c){
   const myTitles = books.map(b=>b.title).slice(0,5);
   if (myTitles.length) {
     apiCall('FIND_SIMILAR', { user_id: CUR.id, book_titles: myTitles }).then(res => {
-      if (!res.success || !res.users?.length) {
-        _similarUsers = [];
-      } else {
-        _similarUsers = res.users;
-        // Aggiungi utenti simili al DB locale
-        res.users.forEach(u => {
-          if (!getUser(u.id)) DB.users.push({id:u.id, username:u.username, level:u.level||1, avatar:'', stats:{}});
-        });
-        saveDB();
-      }
-      renderSimilarSection();
+      if (!res.success || !res.users?.length) return;
+      const el = document.getElementById('study-similar');
+      if (!el) return;
+      el.innerHTML = '<div class="section-hd" style="margin-top:16px"><span class="section-title">👥 Chi legge cose simili</span></div>'
+        + res.users.map(u => '<div class="friend-card" onclick="viewUserProfile(\'' + u.id + '\')" style="cursor:pointer">'
+          + '<div class="friend-name">' + escHtml(u.username) + '</div>'
+          + '<span class="tag tag-xp">' + u.common + ' libri in comune</span></div>').join('');
     });
   }
-}
-
-function renderSimilarSection() {
-  const el = document.getElementById('study-similar');
-  if (!el) return;
-
-  if (!_similarUsers.length) {
-    el.innerHTML = '';
-    return;
-  }
-
-  const q = _similarFilter.toLowerCase();
-  const filtered = q
-    ? _similarUsers.filter(u =>
-        (u.username||'').toLowerCase().includes(q) ||
-        (u.books||[]).some(t => t.toLowerCase().includes(q))
-      )
-    : _similarUsers;
-
-  let h = '<div class="section-hd" style="margin-top:16px"><span class="section-title">👥 Chi legge cose simili</span></div>'
-    + '<div style="display:flex;gap:8px;margin-bottom:10px">'
-    + '<input class="sm" id="similar-search-input" placeholder="Cerca per nome o libro..." '
-    + 'style="flex:1;margin:0;font-size:14px" value="'+escHtml(_similarFilter)+'" '
-    + 'oninput="_similarFilter=this.value;renderSimilarSection()">'
-    + '</div>';
-
-  if (!filtered.length) {
-    h += '<div style="color:var(--text3);font-size:12px;padding:8px 0">Nessun utente trovato con questo filtro.</div>';
-  } else {
-    h += filtered.map(u => {
-      const books = u.books || [];
-      const booksHtml = books.length
-        ? '<div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5">'
-          + '📚 ' + books.map(t => escHtml(t)).join(' · ') + '</div>'
-        : '';
-      return '<div class="friend-card" onclick="viewUserProfile(\'' + u.id + '\')" style="cursor:pointer;flex-direction:column;align-items:flex-start">'
-        + '<div style="display:flex;align-items:center;gap:10px;width:100%">'
-        + '<div class="feed-avatar" style="flex-shrink:0">' + escHtml((u.username||'?')[0].toUpperCase()) + '</div>'
-        + '<div style="flex:1;min-width:0">'
-        + '<div class="friend-name">'+escHtml(u.username)+'</div>'
-        + '<span class="tag tag-xp">'+u.common+' libri in comune</span>'
-        + '</div>'
-        + '<button class="btn-sm btn-sm-primary" style="font-size:10px" onclick="event.stopPropagation();followUser(\''+u.id+'\',\''+escHtml(u.username)+'\')">Segui</button>'
-        + '</div>'
-        + booksHtml
-        + '</div>';
-    }).join('');
-  }
-
-  el.innerHTML = h;
 }
 
 function addBook(){
@@ -871,7 +665,7 @@ function addBook(){
     DB.books.push(b);saveDB();closeModal('modal-add-book');document.getElementById('book-suggestions').style.display='none';
     ['bk-title','bk-author','bk-pages','bk-emoji'].forEach(id=>{document.getElementById(id).value='';});
     renderStudy();showToast('📖 Libro aggiunto!');playSound('tap');
-    apiCall('SAVE_BOOK', {...b, user_id: CUR.id});
+    apiCall('SAVE_BOOK', {...b, user_id: CUR.id}); 
   });
 }
 
@@ -894,17 +688,16 @@ async function logReading(){
   const xp=pages*XP_BOOK_PER_PAGE;
   const stat=BOOK_GENRE_STAT[b.genre]||'cultura';
   const notes = document.getElementById('rd-notes').value;
-  const session = {id:uid(),user_id:CUR.id,book_id:bookId,date:ts(),pages,current_page:b.current_page,notes,xp};
-  DB.book_sessions.push(session);
+  DB.book_sessions.push({id:uid(),user_id:CUR.id,book_id:bookId,date:ts(),pages,current_page:b.current_page,notes,xp});
   saveDB();closeModal('modal-log-reading');
   awardXP(xp,stat,'— Lettura: '+b.title);
   addFeedPost('📖 '+pages+' pagine di "'+b.title+'"','cultura',xp,notes,'');
   if(b.total_pages&&b.current_page>=b.total_pages&&!b.completed)markBookDone(bookId,true);else renderStudy();
+  
   apiCall('LOG_BOOK_SESSION', {
-    session_id: session.id, book_id: bookId, user_id: CUR.id,
-    pages_read: pages, current_page: b.current_page, date: today(), xp_gained: xp, notes
+    book_id: bookId, user_id: CUR.id,
+    pages_read: pages, date: today(), xp_gained: xp, notes
   });
-  apiCall('SAVE_BOOK', {...b, user_id: CUR.id});
 }
 async function markBookDone(bookId,silent){
   const b=DB.books.find(b=>b.id===bookId);if(!b||b.completed)return;
@@ -913,7 +706,7 @@ async function markBookDone(bookId,silent){
   awardXP(bonus,stat,'— 🏆 Libro: '+b.title);
   addFeedPost('🏆 Finito "'+b.title+'"!','cultura',bonus,'','');
   checkTrophies();renderStudy();
-  apiCall('SAVE_BOOK', {...b, user_id: CUR.id});
+  apiCall('SAVE_BOOK', {...b, user_id: CUR.id}); 
 }
 
 const TROPHY_DEFS=[
@@ -935,8 +728,8 @@ const TROPHY_DEFS=[
   {id:'routine_30',name:'30 routine',emoji:'🌿',cat:'Routine',check:()=>DB.routines.filter(r=>r.user_id===CUR.id).length>=30},
   {id:'pvp_first',name:'Prima sfida',emoji:'⚔️',cat:'Sfide',check:()=>DB.challenges.filter(c=>c.creator_id===CUR.id||c.joiner_id===CUR.id).length>=1},
   {id:'pvp_win',name:'Prima vittoria',emoji:'🏆',cat:'Sfide',check:()=>DB.challenges.filter(c=>c.winner_id===CUR.id).length>=1},
-  {id:'first_friend',name:'Primo seguace',emoji:'👋',cat:'Social',check:()=>(getUser(CUR.id)?.following||[]).length>=1},
-  {id:'friends_5',name:'5 seguiti',emoji:'👥',cat:'Social',check:()=>(getUser(CUR.id)?.following||[]).length>=5},
+  {id:'first_friend',name:'Primo amico',emoji:'👋',cat:'Social',check:()=>(getUser(CUR.id)?.friends||[]).length>=1},
+  {id:'friends_5',name:'5 amici',emoji:'👥',cat:'Social',check:()=>(getUser(CUR.id)?.friends||[]).length>=5},
 ];
 function checkTrophies(){
   const u=getUser(CUR.id);if(!u)return;if(!u.trophies)u.trophies=[];
@@ -974,7 +767,7 @@ function renderExams(c){
     const dlStr=dl!==null?(dl>0?dl+'gg':dl===0?'Oggi!':'Passato'):'';
     const mpColor=mp>75?'var(--green)':mp>40?'var(--accent2)':'var(--red)';
     return '<div class="exam-card">'
-      +'<div class="exam-head" onclick="toggleExamBody(\''+exam.id+'\')">>'
+      +'<div class="exam-head" onclick="toggleExamBody(\''+exam.id+'\')">'
       +'<div class="exam-icon">'+(exam.emoji||'📚')+'</div>'
       +'<div class="exam-info"><div class="exam-name">'+escHtml(exam.title)+'</div><div class="exam-date">'+(exam.exam_date?'📅 '+exam.exam_date+' ('+dlStr+')':'')+' • Mastery <b style="color:'+mpColor+'">'+mp+'%</b></div></div>'
       +'<div style="display:flex;flex-direction:column;gap:4px">'
@@ -994,7 +787,7 @@ function renderChRow(ch){
     +'<div class="ch-btns"><span class="ch-expand" onclick="toggleConcepts(\''+ch.id+'\')">concetti ▾</span><span class="ch-expand" onclick="openAddConcept(\''+ch.id+'\')">+</span></div>'
     +'</div>'
     +'<div id="concepts-'+ch.id+'" style="display:none">'
-    +cos.map(co=>'<div class="concept-row"><div class="concept-check'+(co.completed?' done':'')+'" onclick="toggleConcept(\''+co.id+'\')"></div><span class="concept-name'+(co.completed?' done':'\')+\'">'+escHtml(co.title)+'</span></div>').join('')
+    +cos.map(co=>'<div class="concept-row"><div class="concept-check'+(co.completed?' done':'')+'" onclick="toggleConcept(\''+co.id+'\')"></div><span class="concept-name'+(co.completed?' done':'')+'">'+escHtml(co.title)+'</span></div>').join('')
     +(!cos.length?'<div style="font-size:11px;color:var(--text3);padding:4px 8px">Nessun concetto. Clicca + per aggiungere.</div>':'')
     +'</div>';
 }
@@ -1005,17 +798,14 @@ async function addExam(){
   validateAndPost(title, () => {
     const e={id:uid(),user_id:CUR.id,title,exam_date:document.getElementById('ex-date').value,target_hours:parseInt(document.getElementById('ex-hours').value)||40,emoji:document.getElementById('ex-emoji').value||'',created_at:ts()};
     DB.exams.push(e);saveDB();closeModal('modal-add-exam');document.getElementById('ex-name').value='';renderStudy();showToast('🎓 Esame aggiunto!');playSound('tap');
-    apiCall('SAVE_EXAM', e);
   });
 }
 function openAddChapter(examId){document.getElementById('ch-exam-id').value=examId;document.getElementById('ch-name').value='';openModal('modal-add-chapter');}
 async function addChapter(){
   const name=document.getElementById('ch-name').value.trim();if(!name){showToast('⚠️ Nome capitolo');return;}
   validateAndPost(name, () => {
-    const ch={id:uid(),exam_id:document.getElementById('ch-exam-id').value,title:name,difficulty:parseInt(document.getElementById('ch-diff').value)||3,completed:false,created_at:ts()};
-    DB.chapters.push(ch);
+    DB.chapters.push({id:uid(),exam_id:document.getElementById('ch-exam-id').value,title:name,difficulty:parseInt(document.getElementById('ch-diff').value)||3,completed:false,created_at:ts()});
     saveDB();closeModal('modal-add-chapter');renderStudy();showToast('📖 Capitolo aggiunto!');playSound('tap');
-    apiCall('SAVE_CHAPTER', ch);
   });
 }
 async function toggleChapter(id){
@@ -1023,16 +813,13 @@ async function toggleChapter(id){
   ch.completed=true;ch.completed_at=ts();saveDB();
   awardXP(Math.round(80*DIFF_MULT[ch.difficulty||2]),'mente','— Capitolo: '+ch.title);
   checkTrophies();renderStudy();
-  apiCall('COMPLETE_CHAPTER',{chapter_id:ch.id, exam_id:ch.exam_id, user_id:CUR.id});
 }
 function openAddConcept(chId){document.getElementById('co-chapter-id').value=chId;document.getElementById('co-name').value='';document.getElementById('co-notes').value='';openModal('modal-add-concept');}
 async function addConcept(){
   const name=document.getElementById('co-name').value.trim();if(!name){showToast('⚠️ Nome concetto');return;}
   validateAndPost(name, () => {
-    const co={id:uid(),chapter_id:document.getElementById('co-chapter-id').value,title:name,notes:document.getElementById('co-notes').value,completed:false,created_at:ts()};
-    DB.concepts.push(co);
+    DB.concepts.push({id:uid(),chapter_id:document.getElementById('co-chapter-id').value,title:name,notes:document.getElementById('co-notes').value,completed:false,created_at:ts()});
     saveDB();closeModal('modal-add-concept');renderStudy();showToast('💡 Concetto aggiunto!');playSound('tap');
-    apiCall('SAVE_CONCEPT', co);
   });
 }
 async function toggleConcept(id){
@@ -1053,6 +840,7 @@ async function logSession(){
   awardXP(xp,'mente','— Studio '+mins+'min');
   addFeedPost('Studio '+mins+'min ('+(exam?.title||'generale')+')','mente',xp,notes,'');
   checkTrophies();renderStudy();
+
   apiCall('LOG_STUDY_SESSION', {
     session_id: session.id, exam_id: examId, user_id: CUR.id,
     minutes: mins, notes, xp_gained: xp, created_at: new Date().toISOString()
@@ -1141,6 +929,7 @@ async function createChallenge() {
     const stake = Math.min(20, Math.max(5, parseInt(document.getElementById('pvp-stake').value)||10));
     const isPublic = document.getElementById('pvp-public')?.classList.contains('on') ?? false;
     const deadline = document.getElementById('pvp-deadline').value;
+
     showLoading('Creazione sfida...');
     const res = await apiCall('CREATE_CHALLENGE', {
       creator_id: CUR.id, creator_username: CUR.username,
@@ -1150,6 +939,7 @@ async function createChallenge() {
       deadline, public: isPublic
     });
     hideLoading();
+
     if (res.success) {
       const ch = { id: res.challenge_id, code: res.code, creator_id: CUR.id,
         creator_username: CUR.username, joiner_id: null, type: document.getElementById('pvp-type').value,
@@ -1192,13 +982,16 @@ async function declareWinner(resultType){
   const challengeId = document.getElementById('win-challenge-id').value;
   const ch = DB.challenges.find(c => c.id === challengeId);
   if(!ch) { closeModal('modal-declare-winner'); return; }
+  
   let winnerId = '';
   if(resultType === 'me') winnerId = CUR.id;
   else if(resultType === 'opp') winnerId = (ch.creator_id === CUR.id ? ch.joiner_id : ch.creator_id);
   else winnerId = 'draw';
+
   showLoading('Invio verdetto...');
   const res = await apiCall('DECLARE_WINNER', { challenge_id: challengeId, user_id: CUR.id, winner_id: winnerId });
   hideLoading();
+
   closeModal('modal-declare-winner');
   if(res.success){
     ch.status = 'done';
@@ -1240,9 +1033,6 @@ function renderPendingRules(){
   el.innerHTML = pendingRules.map((r, i) => '<div style="font-size:11px;background:var(--bg3);padding:4px 8px;border-radius:4px;margin-bottom:4px;display:flex;justify-content:space-between"><span><b>['+r.type+']</b> '+escHtml(r.desc)+'</span><span style="color:var(--red);cursor:pointer" onclick="pendingRules.splice('+i+',1);renderPendingRules()">✕</span></div>').join('');
 }
 
-// ══════════════════════════════════════════════════════════════
-//  FRIENDS / SOCIAL — fix username display
-// ══════════════════════════════════════════════════════════════
 function renderFriendsScreen(){
   const c=document.getElementById('friends-container');
   const u=getUser(CUR.id)||CUR;
@@ -1252,6 +1042,7 @@ function renderFriendsScreen(){
   const followersCount=Object.keys(followers).length;
 
   let h='<div style="padding:0 20px">';
+  // Contatori seguiti/seguaci stile Instagram
   h+='<div style="display:flex;gap:0;margin-bottom:18px;background:var(--card);border-radius:var(--r);border:1px solid var(--border);overflow:hidden">'
     +'<div style="flex:1;padding:16px;text-align:center;border-right:1px solid var(--border)">'
     +'<div style="font-size:22px;font-weight:900;color:var(--text)">'+followingCount+'</div>'
@@ -1263,20 +1054,16 @@ function renderFriendsScreen(){
     +'</div>'
     +'</div>';
 
+  // Lista seguiti
   h+='<div class="section-hd"><span class="section-title">Seguiti ('+followingCount+')</span></div>';
   if(following.length){
     following.forEach(fid=>{
       const fu=getUser(fid);
-      // FIX: mostra username dal DB locale se disponibile, altrimenti "Caricamento..."
-      const name = fu ? escHtml(fu.username) : '...';
-      const av=fu?.avatar
-        ?'<img src="'+fu.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
-        :(name !== '...' ? name[0].toUpperCase() : '?');
+      const name=fu?escHtml(fu.username):fid;
+      const av=fu?.avatar?'<img src="'+fu.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':name[0];
       h+='<div class="friend-card" style="display:flex;align-items:center;gap:10px">'
         +'<div class="feed-avatar" onclick="viewUserProfile(\''+fid+'\')">'+av+'</div>'
-        +'<div class="friend-name" style="flex:1;cursor:pointer" onclick="viewUserProfile(\''+fid+'\')">'
-        + name
-        +'<div style="font-size:10px;color:var(--text3)">Lv.'+(fu?.level||'?')+'</div></div>'
+        +'<div class="friend-name" style="flex:1;cursor:pointer" onclick="viewUserProfile(\''+fid+'\')">'+name+'<div style="font-size:10px;color:var(--text3)">Lv.'+(fu?.level||1)+'</div></div>'
         +'<button class="btn-sm btn-sm-ghost" onclick="unfollowUser(\''+fid+'\')">Smetti</button>'
         +'</div>';
     });
@@ -1284,11 +1071,20 @@ function renderFriendsScreen(){
     h+='<div class="empty"><div class="empty-emoji">🔍</div><div class="empty-text">Non segui ancora nessuno.</div></div>';
   }
 
+  // Cerca utenti
   h+='<div class="section-hd" style="margin-top:20px"><span class="section-title">Cerca utenti</span></div>'
     +'<div style="display:flex;gap:8px;margin-bottom:12px"><input class="sm" id="search-user-input" placeholder="Cerca username..." style="flex:1;margin:0"><button class="btn-sm btn-sm-primary" onclick="searchUsersAction()">Cerca</button></div>'
     +'<div id="search-results"></div></div>';
   c.innerHTML=h;
 }
+
+
+
+
+
+
+
+
 
 async function searchUsersAction(){
   const q=document.getElementById('search-user-input').value.trim();
@@ -1300,19 +1096,16 @@ async function searchUsersAction(){
   if(res.success&&res.users){
     const u=getUser(CUR.id)||CUR;
     const myFollowing=new Set(u.following||[]);
-    // Aggiungi utenti trovati al DB locale
-    res.users.forEach(usr=>{
-      const ex = getUser(usr.id);
-      if(!ex) DB.users.push({...usr,avatar:usr.avatar_url||''});
-      else { ex.username=usr.username; ex.level=usr.level; ex.avatar=usr.avatar_url||ex.avatar||''; }
-    });
+    // Aggiungi utenti trovati al DB locale se non presenti
+    res.users.forEach(usr=>{if(!getUser(usr.id))DB.users.push({...usr,avatar:usr.avatar_url||''});});
     saveDB();
     el.innerHTML=res.users.filter(usr=>usr.id!==CUR.id).map(usr=>{
       const isFollowing=myFollowing.has(usr.id);
       return '<div class="friend-card" style="display:flex;align-items:center;gap:10px">'
         +'<div class="feed-avatar" onclick="viewUserProfile(\''+usr.id+'\')">'+escHtml(usr.username[0])+'</div>'
-        +'<div style="flex:1;cursor:pointer" onclick="viewUserProfile(\''+usr.id+'\')"><div class="friend-name">'+escHtml(usr.username)+'</div>'
-        +'<div style="font-size:10px;color:var(--text3)">Lv.'+usr.level+' • '+(usr.followers_count||0)+' seguaci</div>'
+        +'<div style="flex:1;cursor:pointer" onclick="viewUserProfile(\''+usr.id+'\')">'
+        +'<div class="friend-name">'+escHtml(usr.username)+'</div>'
+        +'<div style="font-size:10px;color:var(--text3)">Lv.'+usr.level+' • '+usr.followers_count+' seguaci</div>'
         +'</div>'
         +(isFollowing
           ?'<button class="btn-sm btn-sm-ghost" onclick="unfollowUser(\''+usr.id+'\')">Seguito ✓</button>'
@@ -1322,19 +1115,18 @@ async function searchUsersAction(){
   }
 }
 
+
+
+
 async function followUser(targetId, targetUsername){
   const u=getUser(CUR.id);
   if(!u.following)u.following=[];
   if(u.following.includes(targetId)){showToast('Stai già seguendo questo utente');return;}
   u.following.push(targetId);
-  // Assicurati che l'utente seguito sia nel DB locale con il suo username
-  if(!getUser(targetId)){
-    DB.users.push({id:targetId, username:targetUsername, level:1, avatar:'', stats:{}});
-  }
   saveDB();syncCUR(u);
   showToast('✅ Ora segui '+targetUsername+'!');playSound('tap');
   renderFriendsScreen();
-  const res = await apiCall('FOLLOW_USER',{follower_id:CUR.id,target_id:targetId,follower_username:u.username});
+  await apiCall('FOLLOW_USER',{follower_id:CUR.id,target_id:targetId,follower_username:u.username});
   apiCall('SYNC_USER_DATA',buildUserPayload(u));
 }
 
@@ -1347,6 +1139,27 @@ async function unfollowUser(targetId){
   renderFriendsScreen();
   await apiCall('UNFOLLOW_USER',{follower_id:CUR.id,target_id:targetId});
   apiCall('SYNC_USER_DATA',buildUserPayload(u));
+}
+
+
+
+
+
+
+
+
+
+
+function addFriend(fid){
+  const u=getUser(CUR.id);
+  if(!u.friends) u.friends=[];
+  if(!u.friends.includes(fid)){
+    u.friends.push(fid);
+    saveDB(); syncCUR(u);
+    showToast('👋 Amico aggiunto!');
+    renderFriendsScreen();
+    apiCall('SYNC_USER_DATA',buildUserPayload(u));
+  }
 }
 
 let statsTab = 'stats';
@@ -1380,6 +1193,8 @@ function renderMyStats(){
   const followersCount=Object.keys(u.followers||{}).length;
 
   let h='<div style="padding:0 20px 20px">';
+
+  // Card avatar + info principale
   h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:14px;text-align:center">'
     +'<div style="width:80px;height:80px;border-radius:50%;background:var(--accent-bg);border:3px solid rgba(124,106,247,0.4);overflow:hidden;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer" onclick="changeAvatar()">'
     +av
@@ -1387,26 +1202,30 @@ function renderMyStats(){
     +'</div>'
     +'<div style="font-size:18px;font-weight:900;margin-bottom:3px">'+escHtml(u.username||'')+'</div>'
     +'<div style="font-size:12px;color:var(--accent2);font-weight:700;margin-bottom:14px">'+rankTitle(lvl)+' · Lv.'+lvl+'</div>'
+    // Barra XP
     +'<div style="height:7px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:5px">'
     +'<div style="height:100%;width:'+pct+'%;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:4px;transition:width 0.8s ease"></div>'
     +'</div>'
     +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:16px">'
     +'<span>'+xpCur.toLocaleString()+' XP</span><span>→ Lv.'+(lvl+1)+' ('+xpNxt.toLocaleString()+')</span>'
     +'</div>'
+    // Contatori seguiti/seguaci
     +'<div style="display:flex;gap:0;background:var(--bg2);border-radius:10px;border:1px solid var(--border);overflow:hidden">'
     +'<div style="flex:1;padding:10px;text-align:center;border-right:1px solid var(--border)"><div style="font-size:17px;font-weight:900">'+followingCount+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">Seguiti</div></div>'
     +'<div style="flex:1;padding:10px;text-align:center"><div style="font-size:17px;font-weight:900">'+followersCount+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">Seguaci</div></div>'
     +'</div>'
     +'</div>';
 
+  // Stats grid
   h+='<div class="section-hd"><span class="section-title">Statistiche</span></div>'
     +'<div class="stats-grid">';
   Object.entries(s).forEach(([k,v])=>{
     if(!v&&v!==0)return;
-    h+='<div class="stat-card"><div class="stat-val" style="color:'+(STAT_COLORS[k]||'var(--accent)')+'">'+ v+'</div><div class="stat-lbl">'+k.toUpperCase()+'</div></div>';
+    h+='<div class="stat-card"><div class="stat-val" style="color:'+(STAT_COLORS[k]||'var(--accent)')+'">'+v+'</div><div class="stat-lbl">'+k.toUpperCase()+'</div></div>';
   });
   h+='</div>';
 
+  // Azioni profilo
   h+='<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">';
   const isPublic=u.public_profile!==false;
   h+='<div style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px">'
@@ -1415,7 +1234,9 @@ function renderMyStats(){
     +'</div>';
   h+='<button class="btn-sm btn-sm-ghost" style="width:100%;padding:13px" onclick="openModal(\'modal-nations\');renderNationsModal()">🌍 Lingue parlate</button>';
   h+='<button class="btn-sm btn-sm-ghost" style="width:100%;padding:13px;color:var(--red)" onclick="doLogout()">Esci dall\'account</button>';
-  h+='</div></div>';
+  h+='</div>';
+
+  h+='</div>';
   c.innerHTML=h;
 }
 
@@ -1443,11 +1264,15 @@ function changeAvatar(){
 function doLogout(){
   if(!confirm('Sei sicuro di voler uscire?'))return;
   localStorage.removeItem('lq_cur_v5');
-  CUR=null;_feedCache=[];_similarUsers=[];_similarFilter='';
+  CUR=null;_feedCache=[];
   document.getElementById('app').style.display='none';
   document.getElementById('auth-screen').style.display='flex';
   showToast('Arrivederci!');
 }
+
+
+
+
 
 function renderNationsModal(){
   const u=getUser(CUR.id)||CUR;
@@ -1478,27 +1303,9 @@ function saveLanguages(){
   apiCall('SYNC_USER_DATA',buildUserPayload(u));
 }
 
-async function renderLeaderboard(){
+function renderLeaderboard(){
   const c=document.getElementById('stats-container');
-  c.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)"><div class="loading-spinner" style="margin:0 auto 12px"></div>Carico leaderboard...</div>';
-  const res = await apiCall('GET_LEADERBOARD',{limit:20});
-  if(res.success && res.users){
-    let h='<div style="padding:0 20px 20px">';
-    h+='<div class="section-hd" style="margin-bottom:10px"><span class="section-title">🏆 Top Giocatori</span></div>';
-    res.users.forEach((u,i)=>{
-      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1);
-      const isMe = u.id === CUR.id;
-      h+='<div class="friend-card" style="display:flex;align-items:center;gap:10px'+(isMe?';border-color:var(--accent)':'')+'" onclick="viewUserProfile(\''+u.id+'\')">>'
-        +'<div style="font-size:18px;font-weight:900;min-width:32px;text-align:center">'+medal+'</div>'
-        +'<div style="flex:1"><div class="friend-name">'+escHtml(u.username)+(isMe?' (tu)':'')+'</div>'
-        +'<div style="font-size:10px;color:var(--text3)">Lv.'+u.level+' · '+(u.xp_total||0).toLocaleString()+' XP</div></div>'
-        +'</div>';
-    });
-    h+='</div>';
-    c.innerHTML=h;
-  } else {
-    c.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">Leaderboard non disponibile</div>';
-  }
+  c.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">Leaderboard in arrivo</div>';
 }
 
 function renderPersonalCalendar() {
@@ -1511,12 +1318,12 @@ function renderPersonalCalendar() {
       if (d === dateStr) events.push({type:'quest', label:' '+q.name, xp:q.xp_base, cat:q.category});
     });
     DB.sessions.filter(s => s.user_id===CUR.id).forEach(s => {
-      const d = new Date(s.date||s.ts||0).toISOString().split('T')[0];
-      if (d === dateStr) { const ex = DB.exams.find(e=>e.id===s.exam_id); events.push({type:'study', label:' '+(ex?.title||s.exam_name||'Studio'), xp:s.xp||0, cat:'mente'}); }
+      const d = s.date || new Date(s.ts||0).toISOString().split('T')[0];
+      if (d === dateStr) { const ex = DB.exams.find(e=>e.id===s.exam_id); events.push({type:'study', label:' '+(ex?.name||'Studio'), xp:s.xp||0, cat:'mente'}); }
     });
     DB.book_sessions.filter(s => s.user_id===CUR.id).forEach(s => {
-      const d = new Date(s.date||s.ts||0).toISOString().split('T')[0];
-      if (d === dateStr) { const bk = DB.books.find(b=>b.id===s.book_id); events.push({type:'lettura', label:' '+(bk?.title||'Lettura'), xp:s.xp||s.xp_gained||0, cat:'cultura'}); }
+      const d = s.date || new Date(s.ts||0).toISOString().split('T')[0];
+      if (d === dateStr) { const bk = DB.books.find(b=>b.id===s.book_id); events.push({type:'study', label:' '+(bk?.title||'Lettura'), xp:s.xp_gained||0, cat:'cultura'}); }
     });
     DB.routines.filter(r => r.user_id===CUR.id && r.date===dateStr).forEach(r => {
       const item = ROUTINE_ITEMS.find(x=>x.id===r.item_id)||{emoji:'',name:r.item_id||'Custom'};
@@ -1524,7 +1331,7 @@ function renderPersonalCalendar() {
     });
     (DB.challenges||[]).filter(ch => (ch.creator_id===CUR.id||ch.joiner_id===CUR.id) && ch.created_at).forEach(ch => {
       const d = new Date(ch.created_at).toISOString().split('T')[0];
-      if (d === dateStr) events.push({type:'challenge', label:' Sfida: '+ch.title, xp:ch.status==='done'&&ch.winner_id===CUR.id?ch.stake_xp:0, cat:'sfide'});
+      if (d === dateStr) events.push({type:'challenge', label:' Sfida: '+ch.title, xp:ch.status==='done'&&ch.winner_id===CUR.id?ch.stake:0, cat:'sfide'});
     });
     return events;
   }
@@ -1540,11 +1347,13 @@ function renderPersonalCalendar() {
   }
 
   let h = '<div style="padding:16px 20px">';
+
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">';
-  [['all','Tutto'],['quest','Quest'],['study','Studio'],['lettura','Lettura'],['routine','Routine'],['challenge','Sfide']].forEach(([k,l]) => {
+  [['all','Tutto'],['quest','Quest'],['study','Studio'],['routine','Routine'],['challenge','Sfide']].forEach(([k,l]) => {
     h += '<button class="btn-sm '+(calFilter===k?'btn-sm-primary':'btn-sm-ghost')+'" onclick="calFilter=\''+k+'\';renderPersonalCalendar()">'+l+'</button>';
   });
   h += '</div>';
+
   h += '<div style="text-align:center;font-size:15px;font-weight:700;margin-bottom:10px">📅 '+new Date(y,m).toLocaleString('it',{month:'long',year:'numeric'})+'</div>';
   h += '<div class="cal-grid">';
   ['Lu','Ma','Me','Gi','Ve','Sa','Do'].forEach(d => h += '<div class="cal-day-label">'+d+'</div>');
@@ -1562,9 +1371,9 @@ function renderPersonalCalendar() {
   if (!dayEvents.length) {
     h += '<div style="color:var(--text3);font-size:12px;padding:12px 0">Nessuna attività registrata.</div>';
   } else {
-    const searchVal = document.getElementById('cal-search')?.value?.toLowerCase()||'';
-    h += '<input class="sm" id="cal-search" placeholder="Cerca evento..." style="margin:8px 0" value="'+escHtml(searchVal)+'" oninput="renderPersonalCalendar()">';
-    dayEvents.filter(e => !searchVal || e.label.toLowerCase().includes(searchVal)).forEach(e => {
+    h += '<input class="sm" id="cal-search" placeholder="Cerca evento..." style="margin:8px 0" oninput="renderPersonalCalendar()">';
+    const q = document.getElementById('cal-search')?.value?.toLowerCase()||'';
+    dayEvents.filter(e => !q || e.label.toLowerCase().includes(q)).forEach(e => {
       h += '<div class="session-row"><div class="session-dot" style="background:'+(STAT_COLORS[e.cat]||'var(--accent)')+'"></div>'
         +'<div class="session-info"><div class="session-name">'+escHtml(e.label)+'</div>'
         +'<div class="session-time">'+e.type+'</div></div>'
@@ -1579,7 +1388,6 @@ function openModal(id){document.getElementById(id)?.classList.add('open');}
 function closeModal(id){document.getElementById(id)?.classList.remove('open');}
 
 function viewUserProfile(id){
-  if (!id) return;
   const u=getUser(id)||{id,username:'Utente',level:1,xp_total:0,stats:{},following:[],followers:{}};
   const isSelf=id===CUR.id;
   const myUser=getUser(CUR.id)||CUR;
@@ -1588,16 +1396,7 @@ function viewUserProfile(id){
   const followingCount=(u.following||[]).length;
   const av=u.avatar?'<img src="'+u.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<span style="font-size:28px;font-weight:900;color:var(--accent2)">'+escHtml((u.username||'?')[0].toUpperCase())+'</span>';
   const s=u.stats||{};
-  const statsHtml=Object.entries(s).filter(([,v])=>v>0).map(([k,v])=>'<div style="text-align:center"><div style="font-size:16px;font-weight:900;color:'+(STAT_COLORS[k]||'var(--accent)')+'">'+ v+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase">'+k+'</div></div>').join('');
-
-  // Libri dell'utente (solo propri locali, o da similar)
-  const userBooks = DB.books.filter(b => b.user_id === id);
-  const booksHtml = userBooks.length
-    ? '<div style="margin-top:14px;text-align:left"><div class="section-hd"><span class="section-title">📚 Lista libri</span></div>'
-      + userBooks.map(b => '<div style="font-size:12px;padding:4px 0;color:var(--text2)">'+escHtml(b.emoji||'📖')+' '+escHtml(b.title)+(b.completed?' ✅':'')+'</div>').join('')
-      + '</div>'
-    : '';
-
+  const statsHtml=Object.entries(s).filter(([,v])=>v>0).map(([k,v])=>'<div style="text-align:center"><div style="font-size:16px;font-weight:900;color:'+(STAT_COLORS[k]||'var(--accent)')+'">'+v+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase">'+k+'</div></div>').join('');
   const c=document.getElementById('profile-content');
   c.innerHTML=
     '<div style="padding:24px 20px 20px;text-align:center">'
@@ -1610,28 +1409,13 @@ function viewUserProfile(id){
     +'<div style="flex:1;padding:12px;text-align:center"><div style="font-size:18px;font-weight:900">'+followersCount+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">Seguaci</div></div>'
     +'</div>'
     +(statsHtml?'<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:16px">'+statsHtml+'</div>':'')
-    + booksHtml
     +(!isSelf
       ?(isFollowing
-        ?'<button class="btn btn-primary" style="opacity:0.7;margin-top:14px" onclick="unfollowUser(\''+id+'\');closeModal(\'modal-profile\')">✓ Seguito · Smetti di seguire</button>'
-        :'<button class="btn btn-primary" style="margin-top:14px" onclick="followUser(\''+id+'\',\''+escHtml(u.username||'')+'\');closeModal(\'modal-profile\')">➕ Segui</button>')
-      :'<button class="btn btn-primary" style="margin-top:14px" onclick="closeModal(\'modal-profile\')">Chiudi</button>')
+        ?'<button class="btn btn-primary" style="opacity:0.7" onclick="unfollowUser(\''+id+'\');closeModal(\'modal-profile\')">✓ Seguito · Smetti di seguire</button>'
+        :'<button class="btn btn-primary" onclick="followUser(\''+id+'\',\''+escHtml(u.username||'')+'\');closeModal(\'modal-profile\')">➕ Segui</button>')
+      :'<button class="btn btn-primary" onclick="closeModal(\'modal-profile\')">Chiudi</button>')
     +'</div>';
   openModal('modal-profile');
-
-  // Se utente non in locale, carica dal cloud
-  if (!getUser(id) || id !== CUR.id) {
-    apiCall('GET_USER_PROFILE', {user_id: id}).then(res => {
-      if (res.success && res.user) {
-        const ex = DB.users.find(x => x.id === id);
-        if (ex) Object.assign(ex, {...res.user, avatar: res.user.avatar_url || ex.avatar});
-        else DB.users.push({...res.user, avatar: res.user.avatar_url || ''});
-        saveDB();
-        // Re-apri il profilo con dati aggiornati
-        viewUserProfile(id);
-      }
-    });
-  }
 }
 
 function hideSplash(){
@@ -1645,9 +1429,10 @@ function bootApp(){
   hideSplash();
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='flex';
+  // [PATCH V3] Imposta etichetta feed corretta al boot
+  const lbl=document.getElementById('feed-switch-label');
+  if(lbl)lbl.textContent='Seguiti';
   feedMode='following';
-  const track = document.getElementById('feed-switch-track');
-  if(track) track.classList.remove('on');
   gotoTab('home');
   playSound('login');
   apiCall('GET_BANNED_WORDS',{}).then(res=>{
@@ -1662,3 +1447,4 @@ document.addEventListener('DOMContentLoaded', function() {
     try{ bootApp(); }
     catch(e){ console.error('bootApp error:',e); CUR=null; hideSplash(); }
   }
+});
