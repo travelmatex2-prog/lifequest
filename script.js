@@ -1038,11 +1038,7 @@ async function viewUserProfileBooks(userId){
   openModal('modal-profile');
 }
 
-      
-      
-    });
-  }
-}
+
 
 function addBook(){
   const title=document.getElementById('bk-title').value.trim();if(!title){showToast('⚠️ Inserisci il titolo');return;}
