@@ -660,10 +660,14 @@ function onBookTitleInput(){
   const val=document.getElementById('bk-title').value;
   const el=document.getElementById('book-suggestions');
   if(val.length<2){el.innerHTML='';el.style.display='none';return;}
-  
   const q=val.toLowerCase(),seen=new Set(),res=[];
   DB.books.forEach(b=>{const k=b.title.toLowerCase();if(k.includes(q)&&!seen.has(k)){seen.add(k);res.push(b);}});
-  // Se pochi risultati locali, cerca anche nel cloud
+  if(res.length){
+    el.innerHTML=res.slice(0,6).map(b=>'<div class="suggestion-item" onclick="selectBookSuggestion(\''+b.id+'\')">'+escHtml(b.emoji||'📖')+' '+escHtml(b.title)+'<span style="color:var(--text3);font-size:10px"> — '+escHtml(b.author||'')+'</span></div>').join('');
+    el.style.display='block';
+  } else {
+    el.innerHTML='';el.style.display='none';
+  }
   if(res.length<3){
     apiCall('SEARCH_CATALOG_BOOKS',{query:val}).then(cloudRes=>{
       if(cloudRes.success&&cloudRes.books){
@@ -674,7 +678,10 @@ function onBookTitleInput(){
         if(res.length){
           el.innerHTML=res.slice(0,6).map(b=>'<div class="suggestion-item" onclick="selectBookSuggestion(\''+b.id+'\')">'+escHtml(b.emoji||'📖')+' '+escHtml(b.title)+'<span style="color:var(--text3);font-size:10px"> — '+escHtml(b.author||'')+'</span></div>').join('');
           el.style.display='block';
-        
+        }
+      }
+    });
+  }
 }
 function selectBookSuggestion(id){
   const b=DB.books.find(x=>x.id===id);if(!b)return;
@@ -716,7 +723,7 @@ function renderBooks(c){
 
 
       
-      el.innerHTML = '<div class="section-hd" style="margin-top:16px"><span class="section-title">👥 Chi legge cose simili</span></div>'
+       el.innerHTML = '<div class="section-hd" style="margin-top:16px"><span class="section-title">👥 Chi legge cose simili</span></div>'
         + '<input class="sm" id="similar-search" placeholder="Cerca utente..." style="margin:8px 0" oninput="filterSimilarUsers()">'
         + '<div id="similar-list">'
         + res.users.map(u => '<div class="friend-card similar-user-card" data-username="'+escHtml(u.username.toLowerCase())+'" onclick="viewUserProfileBooks(\''+u.id+'\')" style="cursor:pointer">'
@@ -725,20 +732,16 @@ function renderBooks(c){
           + (u.common_titles&&u.common_titles.length?'<div style="font-size:10px;color:var(--text3);margin-top:4px">📖 '+u.common_titles.map(t=>escHtml(t)).join(', ')+'</div>':'')
           + '</div>').join('')
         + '</div>';
+    });   // ← chiude il .then(res => {
+  }       // ← chiude il if(myTitles.length)
+}         // ← chiude renderBooks
 
-
-
-
-
-
-
-
-      function filterSimilarUsers(){
+function filterSimilarUsers(){
   const q=(document.getElementById('similar-search')?.value||'').toLowerCase();
   document.querySelectorAll('.similar-user-card').forEach(el=>{
     el.style.display=(!q||el.dataset.username.includes(q))?'':'none';
-
-
+  });
+}
 
 // ══ SCHEDA LIBRI ══
 let libriTab = 'catalogo';
