@@ -2,7 +2,7 @@
 //  LIFEQUEST — script.js AGGIORNATO CON PATCH 7, 8, 9, 10, 11 & 12
 // ══════════════════════════════════════════════════════════════
 
-const API_URL = "https://script.google.com/macros/s/AKfycbyTQTyoQIdh8PXmLHKTkyR7z28BRnsQM7XtMfsypyb4Tq0RHHTRFtNvysOft_ClX_4hzw/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwdjBTzaKH0RMjveL82AkD6DV41TGxfHwAerKhFQaKejFABHdTaF8AT1xE3MYjmBQDX1Q/exec";
 const DB_KEY  = 'lq_db_v5';
 
 const RANK_TITLES = ['Novizio','Apprendista','Studioso','Veterano','Esperto','Maestro','Gran Maestro','Leggenda','Semidio','Dio degli Eroi'];
