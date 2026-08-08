@@ -756,3 +756,27 @@ textarea.sm{resize:vertical;min-height:72px;line-height:1.5;font-size:14px}
 }
 .empty-emoji{font-size:40px;line-height:1}
 .empty-text{font-size:13px;line-height:1.6;color:var(--text3)}
+
+
+
+
+/* ── LIBRI / DISCUSSIONI ── */
+.similar-user-card { transition: opacity 0.2s; }
+#disc-search, #catalog-search, #similar-search { width: 100%; box-sizing: border-box; }
+
+/* Paginazione discussioni */
+#libri-container .btn-sm { min-width: 32px; }
+
+/* Nav refresh */
+#nav-refresh svg { stroke: var(--text2); }
+#nav-libri svg { stroke: var(--text2); }
+#nav-refresh.active svg, #nav-libri.active svg { stroke: var(--accent); }
+
+/* Suggestions dropdown (già esistente in bk-title, esteso a altri campi) */
+#global-book-suggestions, #disc-book-suggestions {
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 0 0 var(--r) var(--r); z-index: 100;
+  max-height: 200px; overflow-y: auto;
+}
+
