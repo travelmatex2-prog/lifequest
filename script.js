@@ -227,9 +227,6 @@ async function doRegister(){
   err.textContent='Registrazione in corso...';
   showLoading('Creazione personaggio...');
   const result=await apiCall('REGISTER_USER',{username:user,password_hash,pin_hash});
-
-
-  
   hideLoading();
   if(result.success){
     const u={id:result.user_id,username:user,password_hash,pin_hash,xp_total:0,level:1,streak_days:0,last_active:today(),public_profile:true,avatar:'',languages:[],stats:{mente:0,corpo:0,cultura:0,sociale:0,'produttivita':0,sfide:0},trophies:[],privacy:{},following:[],followers:{}};
@@ -241,7 +238,8 @@ async function doRegister(){
   }else{
     err.textContent=result.message||'Errore di registrazione';
   }
-}  
+}
+
 async function doLogin(){
   const user=document.getElementById('l-user').value.trim();
   const pass=document.getElementById('l-pass').value;
@@ -259,17 +257,10 @@ async function doLogin(){
         cu.xp_total=Math.max(local.xp_total||0,cu.xp_total||0);
         cu.level=Math.max(local.level||1,cu.level||1);
         cu.streak_days=Math.max(local.streak_days||0,cu.streak_days||0);
-
-
-        
-         cu.trophies=local.trophies||[];cu.privacy=local.privacy||{};
-        // [PATCH V3] Usa following/followers dal cloud (più aggiornato), fallback al locale
+        cu.trophies=local.trophies||[];cu.privacy=local.privacy||{};
         cu.following = (cu.following && cu.following.length) ? cu.following : (local.following||[]);
         cu.followers = (cu.followers && Object.keys(cu.followers).length) ? cu.followers : (local.followers||{});
         cu.avatar=local.avatar||cu.avatar_url||cu.avatar||''; cu.languages=cu.languages?.length?cu.languages:(local.languages||[]);
-
-
-        
         if(cu.stats)Object.keys(local.stats||{}).forEach(k=>{cu.stats[k]=Math.max(cu.stats[k]||0,local.stats[k]||0);});
         DB.users[DB.users.indexOf(local)]=cu;
       }else{
@@ -278,7 +269,6 @@ async function doLogin(){
         DB.users.push(cu);
       }
       saveDB();syncCUR(cu);
-      // Sincronizza dati cloud al login
       syncCloudDataOnLogin(cu.id).then(()=>bootApp());
       err.textContent='';
     }else{
@@ -289,18 +279,43 @@ async function doLogin(){
   }catch(e){hideLoading();err.textContent='Errore di connessione';}
 }
 
-
+// ══ BUG 2 FIX — funzione doResetPin precedentemente mancante ══
+async function doResetPin(){
+  const user    = document.getElementById('pr-user').value.trim();
+  const pin     = document.getElementById('pr-pin').value.trim();
+  const np      = document.getElementById('pr-newpass').value;
+  const err     = document.getElementById('pr-error');
+  if(!user || !pin || !np){ err.textContent='Compila tutti i campi'; return; }
+  if(np.length < 6){ err.textContent='Password min 6 caratteri'; return; }
+  if(!/^\d{4}$/.test(pin)){ err.textContent='PIN: 4 cifre numeriche'; return; }
+  const pin_hash          = await hashStr(pin + 'lq_pin_v2');
+  const new_password_hash = await hashStr(np  + 'lq_salt_v2');
+  err.textContent = 'Reset in corso...';
+  showLoading('Reimpostazione password...');
+  const res = await apiCall('RESET_PIN', { username: user, pin_hash, new_password_hash });
+  hideLoading();
+  if(res.success){
+    showToast('✅ Password reimpostata! Ora accedi.');
+    closeModal('modal-pin-reset');
+    err.textContent = '';
+    // Pre-compila username nel form login per comodità
+    const lUser = document.getElementById('l-user');
+    if(lUser) lUser.value = user;
+    switchAuthTab('login');
+  } else {
+    err.textContent = res.message || 'Errore: PIN o username errati';
+    playSound('error');
+  }
+}
 
 async function syncCloudDataOnLogin(userId) {
   try {
-    // Sync quests dal cloud
     const qRes = await apiCall('GET_USER_QUESTS', { user_id: userId });
     if (qRes.success && qRes.quests) {
       qRes.quests.forEach(cq => {
         if (!DB.quests.find(q => q.id === cq.id)) DB.quests.push(cq);
       });
     }
-    // Sync books dal cloud
     const bRes = await apiCall('GET_USER_BOOKS', { user_id: userId });
     if (bRes.success && bRes.books) {
       bRes.books.forEach(cb => {
@@ -309,21 +324,18 @@ async function syncCloudDataOnLogin(userId) {
         else DB.books.push(cb);
       });
     }
-    // Sync book_sessions
     const bsRes = await apiCall('GET_USER_BOOK_SESSIONS', { user_id: userId });
     if (bsRes.success && bsRes.sessions) {
       bsRes.sessions.forEach(cs => {
         if (!DB.book_sessions.find(s => s.id === cs.id)) DB.book_sessions.push(cs);
       });
     }
-    // Sync sessioni studio
     const ssRes = await apiCall('GET_USER_STUDY_SESSIONS', { user_id: userId });
     if (ssRes.success && ssRes.sessions) {
       ssRes.sessions.forEach(cs => {
         if (!DB.sessions.find(s => s.id === cs.id)) DB.sessions.push(cs);
       });
     }
-    // Sync esami
     const exRes = await apiCall('GET_USER_EXAMS', { user_id: userId });
     if (exRes.success && exRes.exams) {
       exRes.exams.forEach(ce => {
@@ -335,8 +347,6 @@ async function syncCloudDataOnLogin(userId) {
     saveDB();
   } catch(e) { console.error('syncCloudDataOnLogin:', e); }
 }
-
-
 
 function gotoTab(tab){
   playSound('tap');
@@ -366,15 +376,11 @@ function updateDashboard(){
   ['mente','corpo','cultura','sociale','sfide'].forEach(k=>{const el=document.getElementById('ds-'+k);if(el)el.textContent=s[k]||0;});
 }
 
-
-
 function renderHome(){
   updateDashboard();
   document.getElementById('motiv-text').textContent=MOTIVS[new Date().getDay()%MOTIVS.length];
   loadAndRenderFeed();
 }
-
-
 
 let feedMode='following';
 let _feedCache=[];
@@ -399,18 +405,15 @@ async function loadAndRenderFeed(){
     });
     hideLoading();
     if(res.success && res.posts){
-      // Merge con post locali non ancora sincronizzati (presenti solo in DB.feed_posts)
       const cloudIds=new Set(res.posts.map(p=>p.id));
       const localOnly=DB.feed_posts.filter(p=>!cloudIds.has(p.id));
       _feedCache=[...res.posts,...localOnly].sort((a,b)=>b.ts-a.ts);
-      // Aggiorna anche i post locali con quelli cloud per coerenza
       res.posts.forEach(cp=>{
         const existing=DB.feed_posts.find(p=>p.id===cp.id);
         if(!existing) DB.feed_posts.unshift(cp);
       });
       saveDB();
     } else {
-      // Fallback locale
       _feedCache=[...DB.feed_posts].sort((a,b)=>b.ts-a.ts);
     }
   }catch(e){
@@ -429,7 +432,6 @@ function renderFeed(){
   if(feedMode==='following'){
     posts=posts.filter(p=>p.user_id===CUR.id||myFollowing.has(p.user_id));
   } else {
-    // modalità "Tutti": filtra per lingua se impostata
     if(myLanguages.size>0){
       posts=posts.filter(p=>{
         if(p.user_id===CUR.id)return true;
@@ -449,8 +451,8 @@ function renderFeed(){
     return;
   }
   el.innerHTML=posts.slice(0,40).map(renderFeedPost).join('');
-
 }
+
 function renderFeedPost(p){
   const author=getUser(p.user_id);
   const name=author?escHtml(author.username):'Utente';
@@ -478,6 +480,7 @@ function renderFeedPost(p){
     +'<div class="comment-input-row"><input class="sm comment-input" id="ci-'+p.id+'" placeholder="Commenta..." onkeydown="if(event.key===\'Enter\')submitComment(\''+p.id+'\')"><button class="btn-sm btn-sm-primary" onclick="submitComment(\''+p.id+'\')">↑</button></div>'
     +'</div></div>';
 }
+
 function toggleLike(postId){
   playSound('like');
   const p=DB.feed_posts.find(x=>x.id===postId);if(!p)return;
@@ -516,7 +519,6 @@ function addFeedPost(title,category,xp,notes,photo){
   DB.feed_posts.unshift(p);
   _feedCache.unshift(p);
   saveDB();
-  // Salva post nel cloud per renderlo visibile agli altri utenti
   apiCall('SAVE_FEED_POST',p);
   return p.id;
 }
@@ -587,7 +589,6 @@ function openCustomRoutineModal(){openModal('modal-custom-routine');}
 function doRoutine(itemId) {
   const item = ROUTINE_ITEMS.find(x => x.id === itemId); if (!item) return;
   if (itemId === 'custom') { openCustomRoutineModal(); return; }
-
   const todayRoutineQuests = DB.quests.filter(q =>
     q.user_id === CUR.id && q.routine_item_id === itemId && q.created_at >= new Date().setHours(0,0,0,0)
   );
@@ -595,7 +596,6 @@ function doRoutine(itemId) {
     showToast('⚠️ Max 3 per questo tipo oggi');
     playSound('error'); return;
   }
-
   const q = {
     id: uid(), user_id: CUR.id, name: item.name,
     category: item.cat, difficulty: 1, type: 'todo',
@@ -719,11 +719,7 @@ function renderBooks(c){
       if (!res.success || !res.users?.length) return;
       const el = document.getElementById('study-similar');
       if (!el) return;
-
-
-
-      
-       el.innerHTML = '<div class="section-hd" style="margin-top:16px"><span class="section-title">👥 Chi legge cose simili</span></div>'
+      el.innerHTML = '<div class="section-hd" style="margin-top:16px"><span class="section-title">👥 Chi legge cose simili</span></div>'
         + '<input class="sm" id="similar-search" placeholder="Cerca utente..." style="margin:8px 0" oninput="filterSimilarUsers()">'
         + '<div id="similar-list">'
         + res.users.map(u => '<div class="friend-card similar-user-card" data-username="'+escHtml(u.username.toLowerCase())+'" onclick="viewUserProfileBooks(\''+u.id+'\')" style="cursor:pointer">'
@@ -732,9 +728,9 @@ function renderBooks(c){
           + (u.common_titles&&u.common_titles.length?'<div style="font-size:10px;color:var(--text3);margin-top:4px">📖 '+u.common_titles.map(t=>escHtml(t)).join(', ')+'</div>':'')
           + '</div>').join('')
         + '</div>';
-    });   // ← chiude il .then(res => {
-  }       // ← chiude il if(myTitles.length)
-}         // ← chiude renderBooks
+    });
+  }
+}
 
 function filterSimilarUsers(){
   const q=(document.getElementById('similar-search')?.value||'').toLowerCase();
@@ -743,7 +739,6 @@ function filterSimilarUsers(){
   });
 }
 
-// ══ SCHEDA LIBRI ══
 let libriTab = 'catalogo';
 let discussionPage = 1;
 const DISC_PER_PAGE = 10;
@@ -786,12 +781,11 @@ function addGlobalBook(){
   const title=document.getElementById('gbk-title').value.trim();
   if(!title){showToast('⚠️ Inserisci il titolo');return;}
   validateAndPost(title,()=>{
-    // Controlla se esiste già nel catalogo globale (per titolo)
     const existing=DB.books.find(b=>b.title.toLowerCase()===title.toLowerCase()&&!b.user_id);
     if(existing){showToast('ℹ️ Libro già in catalogo!');closeModal('modal-add-book-global');return;}
     const diff=parseInt(document.getElementById('gbk-diff').value)||3;
     const b={
-      id:'cat_'+uid(), user_id:null, // null = libro globale del catalogo
+      id:'cat_'+uid(), user_id:null,
       title, author:document.getElementById('gbk-author').value.trim(),
       genre:document.getElementById('gbk-genre').value,
       difficulty:diff,
@@ -810,7 +804,6 @@ function addGlobalBook(){
 
 function renderLibriCatalogo(){
   const c=document.getElementById('libri-container');
-  // Cerca nel catalogo globale (libri con is_catalog o tutti)
   const catalogBooks=DB.books.filter(b=>b.is_catalog||!b.user_id);
   const myBooks=DB.books.filter(b=>b.user_id===CUR.id);
   
@@ -819,7 +812,6 @@ function renderLibriCatalogo(){
   
   const q=(document.getElementById('catalog-search')?.value||'').toLowerCase();
   
-  // Catalogo globale
   const filtered=catalogBooks.filter(b=>!q||(b.title.toLowerCase().includes(q)||((b.author||'').toLowerCase().includes(q))||((b.genre||'').toLowerCase().includes(q))));
   
   if(filtered.length){
@@ -844,7 +836,6 @@ function renderLibriCatalogo(){
   
   h+='</div>';
   c.innerHTML=h;
-  // Ricarica catalogo dal cloud se vuoto
   if(!catalogBooks.length){
     apiCall('GET_CATALOG_BOOKS',{}).then(res=>{
       if(res.success&&res.books){
@@ -859,7 +850,6 @@ function renderLibriCatalogo(){
 
 function addBookFromCatalog(bookId){
   const cat=DB.books.find(b=>b.id===bookId);if(!cat)return;
-  // Aggiungi alla mia lista (copia con user_id)
   const already=DB.books.find(b=>b.user_id===CUR.id&&b.title.toLowerCase()===cat.title.toLowerCase());
   if(already){showToast('📖 Già nella tua lista!');return;}
   const b={...cat,id:uid(),user_id:CUR.id,current_page:0,completed:false,created_at:ts(),is_catalog:false};
@@ -869,7 +859,6 @@ function addBookFromCatalog(bookId){
   renderLibriCatalogo();
 }
 
-// ══ DISCUSSIONI ══
 function onDiscBookInput(){
   const val=document.getElementById('disc-book-title').value;
   const el=document.getElementById('disc-book-suggestions');
@@ -918,7 +907,6 @@ function renderDiscussioni(){
   const q=(document.getElementById('disc-search')?.value||'').toLowerCase();
   let discs=[...(DB.discussions||[])];
   
-  // Carica dal cloud se vuoto
   if(!discs.length){
     apiCall('GET_DISCUSSIONS',{}).then(res=>{
       if(res.success&&res.discussions){
@@ -939,7 +927,6 @@ function renderDiscussioni(){
     h+='<div class="empty"><div class="empty-emoji">💬</div><div class="empty-text">'+(q?'Nessuna discussione trovata.':'Sii il primo a creare una discussione!')+'</div></div>';
   } else {
     h+=pageDiscs.map(d=>renderDiscCard(d)).join('');
-    // Paginazione
     if(pages>1){
       h+='<div style="display:flex;justify-content:center;gap:6px;margin-top:14px;flex-wrap:wrap">';
       for(let p=1;p<=pages;p++){
@@ -995,22 +982,18 @@ function replyToDisc(id){
     const r={id:uid(),user_id:CUR.id,username:CUR.username,text,ts:ts()};
     d.replies.push(r);saveDB();inp.value='';
     apiCall('REPLY_DISCUSSION',{discussion_id:id,reply:r});
-    toggleDiscReplies(id);toggleDiscReplies(id); // refresh
+    toggleDiscReplies(id);toggleDiscReplies(id);
     renderDiscussioni();
   });
 }
 
-    
-
 async function viewUserProfileBooks(userId){
-  // Carica profilo + libri in comune
   const u=getUser(userId)||{id:userId,username:'Utente',level:1,xp_total:0,stats:{},following:[],followers:{}};
   const myUser=getUser(CUR.id)||CUR;
   const myBooks=DB.books.filter(b=>b.user_id===CUR.id).map(b=>b.title.toLowerCase());
   const isFollowing=(myUser.following||[]).includes(userId);
   const av=u.avatar?'<img src="'+u.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<span style="font-size:28px;font-weight:900;color:var(--accent2)">'+escHtml((u.username||'?')[0].toUpperCase())+'</span>';
   
-  // Recupera libri dell'utente dal cloud
   let userBooks=[];
   try{
     const bRes=await apiCall('GET_USER_BOOKS',{user_id:userId});
@@ -1037,8 +1020,6 @@ async function viewUserProfileBooks(userId){
     +'</div>';
   openModal('modal-profile');
 }
-
-
 
 function addBook(){
   const title=document.getElementById('bk-title').value.trim();if(!title){showToast('⚠️ Inserisci il titolo');return;}
@@ -1076,7 +1057,6 @@ async function logReading(){
   awardXP(xp,stat,'— Lettura: '+b.title);
   addFeedPost('📖 '+pages+' pagine di "'+b.title+'"','cultura',xp,notes,'');
   if(b.total_pages&&b.current_page>=b.total_pages&&!b.completed)markBookDone(bookId,true);else renderStudy();
-  
   apiCall('LOG_BOOK_SESSION', {
     book_id: bookId, user_id: CUR.id,
     pages_read: pages, date: today(), xp_gained: xp, notes
@@ -1223,7 +1203,6 @@ async function logSession(){
   awardXP(xp,'mente','— Studio '+mins+'min');
   addFeedPost('Studio '+mins+'min ('+(exam?.title||'generale')+')','mente',xp,notes,'');
   checkTrophies();renderStudy();
-
   apiCall('LOG_STUDY_SESSION', {
     session_id: session.id, exam_id: examId, user_id: CUR.id,
     minutes: mins, notes, xp_gained: xp, created_at: new Date().toISOString()
@@ -1425,7 +1404,6 @@ function renderFriendsScreen(){
   const followersCount=Object.keys(followers).length;
 
   let h='<div style="padding:0 20px">';
-  // Contatori seguiti/seguaci stile Instagram
   h+='<div style="display:flex;gap:0;margin-bottom:18px;background:var(--card);border-radius:var(--r);border:1px solid var(--border);overflow:hidden">'
     +'<div style="flex:1;padding:16px;text-align:center;border-right:1px solid var(--border)">'
     +'<div style="font-size:22px;font-weight:900;color:var(--text)">'+followingCount+'</div>'
@@ -1437,16 +1415,11 @@ function renderFriendsScreen(){
     +'</div>'
     +'</div>';
 
-  // Lista seguiti
   h+='<div class="section-hd"><span class="section-title">Seguiti ('+followingCount+')</span></div>';
   if(following.length){
     following.forEach(fid=>{
-
-
-      
       const fu=getUser(fid);
       const name=fu?escHtml(fu.username):'@'+fid;
-      // Se utente non è in DB locale, recuperalo dal cloud
       if(!fu){
         apiCall('GET_USER_DATA',{user_id:fid}).then(r=>{
           if(r.success&&r.user){
@@ -1455,12 +1428,6 @@ function renderFriendsScreen(){
           }
         });
       }
-
-
-
-
-
-      
       const av=fu?.avatar?'<img src="'+fu.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':name[0];
       h+='<div class="friend-card" style="display:flex;align-items:center;gap:10px">'
         +'<div class="feed-avatar" onclick="viewUserProfile(\''+fid+'\')">'+av+'</div>'
@@ -1472,20 +1439,11 @@ function renderFriendsScreen(){
     h+='<div class="empty"><div class="empty-emoji">🔍</div><div class="empty-text">Non segui ancora nessuno.</div></div>';
   }
 
-  // Cerca utenti
   h+='<div class="section-hd" style="margin-top:20px"><span class="section-title">Cerca utenti</span></div>'
     +'<div style="display:flex;gap:8px;margin-bottom:12px"><input class="sm" id="search-user-input" placeholder="Cerca username..." style="flex:1;margin:0"><button class="btn-sm btn-sm-primary" onclick="searchUsersAction()">Cerca</button></div>'
     +'<div id="search-results"></div></div>';
   c.innerHTML=h;
 }
-
-
-
-
-
-
-
-
 
 async function searchUsersAction(){
   const q=document.getElementById('search-user-input').value.trim();
@@ -1497,7 +1455,6 @@ async function searchUsersAction(){
   if(res.success&&res.users){
     const u=getUser(CUR.id)||CUR;
     const myFollowing=new Set(u.following||[]);
-    // Aggiungi utenti trovati al DB locale se non presenti
     res.users.forEach(usr=>{if(!getUser(usr.id))DB.users.push({...usr,avatar:usr.avatar_url||''});});
     saveDB();
     el.innerHTML=res.users.filter(usr=>usr.id!==CUR.id).map(usr=>{
@@ -1515,9 +1472,6 @@ async function searchUsersAction(){
     }).join('')||'<div style="font-size:12px;color:var(--text3)">Nessun utente trovato.</div>';
   }
 }
-
-
-
 
 async function followUser(targetId, targetUsername){
   const u=getUser(CUR.id);
@@ -1541,15 +1495,6 @@ async function unfollowUser(targetId){
   await apiCall('UNFOLLOW_USER',{follower_id:CUR.id,target_id:targetId});
   apiCall('SYNC_USER_DATA',buildUserPayload(u));
 }
-
-
-
-
-
-
-
-
-
 
 function addFriend(fid){
   const u=getUser(CUR.id);
@@ -1595,7 +1540,6 @@ function renderMyStats(){
 
   let h='<div style="padding:0 20px 20px">';
 
-  // Card avatar + info principale
   h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:14px;text-align:center">'
     +'<div style="width:80px;height:80px;border-radius:50%;background:var(--accent-bg);border:3px solid rgba(124,106,247,0.4);overflow:hidden;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer" onclick="changeAvatar()">'
     +av
@@ -1603,21 +1547,18 @@ function renderMyStats(){
     +'</div>'
     +'<div style="font-size:18px;font-weight:900;margin-bottom:3px">'+escHtml(u.username||'')+'</div>'
     +'<div style="font-size:12px;color:var(--accent2);font-weight:700;margin-bottom:14px">'+rankTitle(lvl)+' · Lv.'+lvl+'</div>'
-    // Barra XP
     +'<div style="height:7px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:5px">'
     +'<div style="height:100%;width:'+pct+'%;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:4px;transition:width 0.8s ease"></div>'
     +'</div>'
     +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:16px">'
     +'<span>'+xpCur.toLocaleString()+' XP</span><span>→ Lv.'+(lvl+1)+' ('+xpNxt.toLocaleString()+')</span>'
     +'</div>'
-    // Contatori seguiti/seguaci
     +'<div style="display:flex;gap:0;background:var(--bg2);border-radius:10px;border:1px solid var(--border);overflow:hidden">'
     +'<div style="flex:1;padding:10px;text-align:center;border-right:1px solid var(--border)"><div style="font-size:17px;font-weight:900">'+followingCount+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">Seguiti</div></div>'
     +'<div style="flex:1;padding:10px;text-align:center"><div style="font-size:17px;font-weight:900">'+followersCount+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">Seguaci</div></div>'
     +'</div>'
     +'</div>';
 
-  // Stats grid
   h+='<div class="section-hd"><span class="section-title">Statistiche</span></div>'
     +'<div class="stats-grid">';
   Object.entries(s).forEach(([k,v])=>{
@@ -1626,7 +1567,6 @@ function renderMyStats(){
   });
   h+='</div>';
 
-  // Azioni profilo
   h+='<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">';
   const isPublic=u.public_profile!==false;
   h+='<div style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px">'
@@ -1637,8 +1577,6 @@ function renderMyStats(){
   h+='<button class="btn-sm btn-sm-ghost" style="width:100%;padding:13px;color:var(--red)" onclick="doLogout()">Esci dall\'account</button>';
   h+='</div>';
 
-
- // Generi preferiti
   const myGenres=u.preferred_genres||[];
   h+='<div class="section-hd" style="margin-top:8px"><span class="section-title">📚 Generi preferiti</span></div>';
   h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">';
@@ -1647,8 +1585,6 @@ function renderMyStats(){
     const on=myGenres.includes(g);
     h+='<div class="nation-tile'+(on?' on':'')+'" onclick="togglePreferredGenre(\''+g+'\')">'+escHtml(g)+'</div>';
   });
-  
-  
   h+='</div>';
   c.innerHTML=h;
 }
@@ -1683,7 +1619,6 @@ function doLogout(){
   showToast('Arrivederci!');
 }
 
-
 async function doAppRefresh(){
   playSound('tap');
   showToast('🔄 Aggiornamento in corso...');
@@ -1712,7 +1647,6 @@ async function doAppRefresh(){
     }
     hideLoading();
     showToast('✅ Dati aggiornati!');
-    // Ri-renderizza la tab attiva
     const activeScreen=document.querySelector('.screen.active');
     if(activeScreen){
       const tab=activeScreen.id.replace('screen-','');
@@ -1720,14 +1654,6 @@ async function doAppRefresh(){
     }
   } catch(e){ hideLoading(); showToast('⚠️ Errore aggiornamento'); }
 }
-
-
-
-
-
-
-
-
 
 function renderNationsModal(){
   const u=getUser(CUR.id)||CUR;
@@ -1758,8 +1684,7 @@ function saveLanguages(){
   apiCall('SYNC_USER_DATA',buildUserPayload(u));
 }
 
-
-    function togglePreferredGenre(genre){
+function togglePreferredGenre(genre){
   const u=getUser(CUR.id);
   if(!u.preferred_genres)u.preferred_genres=[];
   const idx=u.preferred_genres.indexOf(genre);
@@ -1770,9 +1695,33 @@ function saveLanguages(){
   showToast(u.preferred_genres.includes(genre)?'✅ Genere aggiunto':'Genere rimosso');
 }
 
-function renderLeaderboard(){
+// ══ BUG 3 FIX — Leaderboard funzionante ══
+async function renderLeaderboard(){
   const c=document.getElementById('stats-container');
-  c.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">Leaderboard in arrivo</div>';
+  c.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">Caricamento classifica...</div>';
+  const res=await apiCall('GET_LEADERBOARD',{});
+  if(!res.success||!res.leaderboard||!res.leaderboard.length){
+    c.innerHTML='<div class="empty"><div class="empty-emoji">🏆</div><div class="empty-text">Nessun utente in classifica.<br><small style="color:var(--text3)">Assicurati di avere il profilo pubblico attivo.</small></div></div>';
+    return;
+  }
+  const medals=['🥇','🥈','🥉'];
+  let h='<div style="padding:0 20px 20px">';
+  h+='<div class="section-hd" style="margin-bottom:12px"><span class="section-title">🏆 Classifica globale ('+res.leaderboard.length+')</span></div>';
+  res.leaderboard.forEach((u,i)=>{
+    const isSelf=u.id===CUR.id;
+    const av=u.avatar_url?'<img src="'+u.avatar_url+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':escHtml((u.username||'?')[0].toUpperCase());
+    h+='<div class="friend-card" style="display:flex;align-items:center;gap:10px;'+(isSelf?'border-color:var(--accent);background:var(--accent-bg)':'')+'" onclick="viewUserProfile(\''+u.id+'\')">'+
+      '<div style="font-size:18px;width:28px;text-align:center;flex-shrink:0">'+(medals[i]||'#'+(i+1))+'</div>'+
+      '<div class="feed-avatar" style="width:36px;height:36px;font-size:13px;flex-shrink:0">'+av+'</div>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(u.username)+(isSelf?' <span style="font-size:10px;color:var(--accent2)">(tu)</span>':'')+'</div>'+
+        '<div style="font-size:10px;color:var(--text3)">'+rankTitle(u.level||1)+' · Lv.'+(u.level||1)+' · 🔥'+(u.streak_days||0)+'gg</div>'+
+      '</div>'+
+      '<div style="font-size:13px;font-weight:900;color:var(--gold)">'+((u.xp_total||0).toLocaleString())+' XP</div>'+
+    '</div>';
+  });
+  h+='</div>';
+  c.innerHTML=h;
 }
 
 function renderPersonalCalendar() {
@@ -1865,7 +1814,6 @@ function viewUserProfile(id){
   const s=u.stats||{};
   const statsHtml=Object.entries(s).filter(([,v])=>v>0).map(([k,v])=>'<div style="text-align:center"><div style="font-size:16px;font-weight:900;color:'+(STAT_COLORS[k]||'var(--accent)')+'">'+v+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase">'+k+'</div></div>').join('');
   
-  // Barra XP profilo
   const _lvl=u.level||1;
   const _pct=xpBarPct(u.xp_total||0,_lvl);
   const _xpNxt=xpForLevel(_lvl+1);
@@ -1903,7 +1851,6 @@ function bootApp(){
   hideSplash();
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='flex';
-  // [PATCH V3] Imposta etichetta feed corretta al boot
   const lbl=document.getElementById('feed-switch-label');
   if(lbl)lbl.textContent='Seguiti';
   feedMode='following';
@@ -1914,7 +1861,6 @@ function bootApp(){
   });
 }
 
-// Avvia dopo che il DOM è completamente caricato
 document.addEventListener('DOMContentLoaded', function() {
   setTimeout(hideSplash, 1500);
   if(CUR){
