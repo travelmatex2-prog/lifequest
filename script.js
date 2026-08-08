@@ -1403,6 +1403,48 @@ function doLogout(){
 }
 
 
+async function doAppRefresh(){
+  playSound('tap');
+  showToast('🔄 Aggiornamento in corso...');
+  showLoading('Aggiornamento...');
+  try {
+    await syncCloudDataOnLogin(CUR.id);
+    const res = await apiCall('LOGIN_USER',{username:CUR.username,password_hash:CUR.password_hash||''});
+    if(res.success&&res.user){
+      const cu=res.user;
+      const local=getUser(CUR.id);
+      if(local){
+        cu.xp_total=Math.max(local.xp_total||0,cu.xp_total||0);
+        cu.level=Math.max(local.level||1,cu.level||1);
+        cu.streak_days=Math.max(local.streak_days||0,cu.streak_days||0);
+        cu.avatar=local.avatar||cu.avatar_url||'';
+        cu.trophies=local.trophies||cu.trophies||[];
+        cu.privacy=local.privacy||{};
+        cu.following=(cu.following&&cu.following.length)?cu.following:(local.following||[]);
+        cu.followers=(cu.followers&&Object.keys(cu.followers).length)?cu.followers:(local.followers||{});
+        cu.languages=cu.languages?.length?cu.languages:(local.languages||[]);
+        cu.preferred_genres=local.preferred_genres||cu.preferred_genres||[];
+        if(cu.stats)Object.keys(local.stats||{}).forEach(k=>{cu.stats[k]=Math.max(cu.stats[k]||0,local.stats[k]||0);});
+        DB.users[DB.users.indexOf(local)]=cu;
+      }
+      saveDB();syncCUR(cu);
+    }
+    hideLoading();
+    showToast('✅ Dati aggiornati!');
+    // Ri-renderizza la tab attiva
+    const activeScreen=document.querySelector('.screen.active');
+    if(activeScreen){
+      const tab=activeScreen.id.replace('screen-','');
+      ({home:renderHome,quest:renderQuests,study:renderStudy,routine:renderRoutine,pvp:renderPvP_load,stats:renderStats,friends:renderFriendsScreen}[tab]||function(){})();
+    }
+  } catch(e){ hideLoading(); showToast('⚠️ Errore aggiornamento'); }
+}
+
+
+
+
+
+
 
 
 
@@ -1529,6 +1571,12 @@ function viewUserProfile(id){
   const av=u.avatar?'<img src="'+u.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<span style="font-size:28px;font-weight:900;color:var(--accent2)">'+escHtml((u.username||'?')[0].toUpperCase())+'</span>';
   const s=u.stats||{};
   const statsHtml=Object.entries(s).filter(([,v])=>v>0).map(([k,v])=>'<div style="text-align:center"><div style="font-size:16px;font-weight:900;color:'+(STAT_COLORS[k]||'var(--accent)')+'">'+v+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase">'+k+'</div></div>').join('');
+  
+  // Barra XP profilo
+  const _lvl=u.level||1;
+  const _pct=xpBarPct(u.xp_total||0,_lvl);
+  const _xpNxt=xpForLevel(_lvl+1);
+
   const c=document.getElementById('profile-content');
   c.innerHTML=
     '<div style="padding:24px 20px 20px;text-align:center">'
@@ -1536,11 +1584,12 @@ function viewUserProfile(id){
     +'<div style="font-size:20px;font-weight:900;margin-bottom:4px">'+escHtml(u.username||'Utente')+'</div>'
     +'<div style="font-size:12px;color:var(--accent2);font-weight:700;margin-bottom:14px">'+rankTitle(u.level||1)+' · Lv.'+(u.level||1)+'</div>'
     +'<div style="display:flex;gap:0;margin-bottom:16px;background:var(--bg2);border-radius:10px;border:1px solid var(--border);overflow:hidden">'
-    +'<div style="flex:1;padding:12px;text-align:center;border-right:1px solid var(--border)"><div style="font-size:18px;font-weight:900">'+(u.xp_total||0).toLocaleString()+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">XP</div></div>'
     +'<div style="flex:1;padding:12px;text-align:center;border-right:1px solid var(--border)"><div style="font-size:18px;font-weight:900">'+followingCount+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">Seguiti</div></div>'
     +'<div style="flex:1;padding:12px;text-align:center"><div style="font-size:18px;font-weight:900">'+followersCount+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">Seguaci</div></div>'
     +'</div>'
     +(statsHtml?'<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:16px">'+statsHtml+'</div>':'')
+    +'<div style="height:6px;background:var(--bg);border-radius:4px;overflow:hidden;margin:0 0 4px"><div style="height:100%;width:'+_pct+'%;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:4px"></div></div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:14px"><span>'+(u.xp_total||0).toLocaleString()+' XP</span><span>→ Lv.'+(_lvl+1)+' ('+_xpNxt.toLocaleString()+')</span></div>'
     +(!isSelf
       ?(isFollowing
         ?'<button class="btn btn-primary" style="opacity:0.7" onclick="unfollowUser(\''+id+'\');closeModal(\'modal-profile\')">✓ Seguito · Smetti di seguire</button>'
