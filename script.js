@@ -276,7 +276,10 @@ async function doLogin(){
         cu.avatar=cu.avatar_url||cu.avatar||''; cu.languages=cu.languages||[];
         DB.users.push(cu);
       }
-      saveDB();syncCUR(cu);bootApp();err.textContent='';
+      saveDB();syncCUR(cu);
+      // Sincronizza dati cloud al login
+      syncCloudDataOnLogin(cu.id).then(()=>bootApp());
+      err.textContent='';
     }else{
       const local=DB.users.find(u=>u.username&&u.username.toLowerCase()===user.toLowerCase()&&u.password_hash===password_hash);
       if(local){syncCUR(local);bootApp();showToast('⚠️ Offline: dati locali');}
@@ -284,6 +287,55 @@ async function doLogin(){
     }
   }catch(e){hideLoading();err.textContent='Errore di connessione';}
 }
+
+
+
+async function syncCloudDataOnLogin(userId) {
+  try {
+    // Sync quests dal cloud
+    const qRes = await apiCall('GET_USER_QUESTS', { user_id: userId });
+    if (qRes.success && qRes.quests) {
+      qRes.quests.forEach(cq => {
+        if (!DB.quests.find(q => q.id === cq.id)) DB.quests.push(cq);
+      });
+    }
+    // Sync books dal cloud
+    const bRes = await apiCall('GET_USER_BOOKS', { user_id: userId });
+    if (bRes.success && bRes.books) {
+      bRes.books.forEach(cb => {
+        const existing = DB.books.find(b => b.id === cb.id);
+        if (existing) Object.assign(existing, cb);
+        else DB.books.push(cb);
+      });
+    }
+    // Sync book_sessions
+    const bsRes = await apiCall('GET_USER_BOOK_SESSIONS', { user_id: userId });
+    if (bsRes.success && bsRes.sessions) {
+      bsRes.sessions.forEach(cs => {
+        if (!DB.book_sessions.find(s => s.id === cs.id)) DB.book_sessions.push(cs);
+      });
+    }
+    // Sync sessioni studio
+    const ssRes = await apiCall('GET_USER_STUDY_SESSIONS', { user_id: userId });
+    if (ssRes.success && ssRes.sessions) {
+      ssRes.sessions.forEach(cs => {
+        if (!DB.sessions.find(s => s.id === cs.id)) DB.sessions.push(cs);
+      });
+    }
+    // Sync esami
+    const exRes = await apiCall('GET_USER_EXAMS', { user_id: userId });
+    if (exRes.success && exRes.exams) {
+      exRes.exams.forEach(ce => {
+        const existing = DB.exams.find(e => e.id === ce.id);
+        if (existing) Object.assign(existing, ce);
+        else DB.exams.push(ce);
+      });
+    }
+    saveDB();
+  } catch(e) { console.error('syncCloudDataOnLogin:', e); }
+}
+
+
 
 function gotoTab(tab){
   playSound('tap');
@@ -649,10 +701,72 @@ function renderBooks(c){
       if (!res.success || !res.users?.length) return;
       const el = document.getElementById('study-similar');
       if (!el) return;
+
+
+
+      
       el.innerHTML = '<div class="section-hd" style="margin-top:16px"><span class="section-title">👥 Chi legge cose simili</span></div>'
-        + res.users.map(u => '<div class="friend-card" onclick="viewUserProfile(\'' + u.id + '\')" style="cursor:pointer">'
+        + '<input class="sm" id="similar-search" placeholder="Cerca utente..." style="margin:8px 0" oninput="filterSimilarUsers()">'
+        + '<div id="similar-list">'
+        + res.users.map(u => '<div class="friend-card similar-user-card" data-username="'+escHtml(u.username.toLowerCase())+'" onclick="viewUserProfileBooks(\''+u.id+'\')" style="cursor:pointer">'
           + '<div class="friend-name">' + escHtml(u.username) + '</div>'
-          + '<span class="tag tag-xp">' + u.common + ' libri in comune</span></div>').join('');
+          + '<span class="tag tag-xp">' + u.common + ' libri in comune</span>'
+          + (u.common_titles&&u.common_titles.length?'<div style="font-size:10px;color:var(--text3);margin-top:4px">📖 '+u.common_titles.map(t=>escHtml(t)).join(', ')+'</div>':'')
+          + '</div>').join('')
+        + '</div>';
+
+
+
+
+
+
+
+
+      function filterSimilarUsers(){
+  const q=(document.getElementById('similar-search')?.value||'').toLowerCase();
+  document.querySelectorAll('.similar-user-card').forEach(el=>{
+    el.style.display=(!q||el.dataset.username.includes(q))?'':'none';
+  });
+}
+
+async function viewUserProfileBooks(userId){
+  // Carica profilo + libri in comune
+  const u=getUser(userId)||{id:userId,username:'Utente',level:1,xp_total:0,stats:{},following:[],followers:{}};
+  const myUser=getUser(CUR.id)||CUR;
+  const myBooks=DB.books.filter(b=>b.user_id===CUR.id).map(b=>b.title.toLowerCase());
+  const isFollowing=(myUser.following||[]).includes(userId);
+  const av=u.avatar?'<img src="'+u.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<span style="font-size:28px;font-weight:900;color:var(--accent2)">'+escHtml((u.username||'?')[0].toUpperCase())+'</span>';
+  
+  // Recupera libri dell'utente dal cloud
+  let userBooks=[];
+  try{
+    const bRes=await apiCall('GET_USER_BOOKS',{user_id:userId});
+    if(bRes.success&&bRes.books) userBooks=bRes.books;
+  }catch(e){}
+  
+  const commonBooks=userBooks.filter(b=>myBooks.includes(b.title.toLowerCase()));
+  const preferredGenres=u.preferred_genres||[];
+  
+  const c=document.getElementById('profile-content');
+  c.innerHTML=
+    '<div style="padding:24px 20px 20px;text-align:center">'
+    +'<div style="width:72px;height:72px;border-radius:50%;background:var(--accent-bg);border:2px solid rgba(124,106,247,0.4);overflow:hidden;margin:0 auto 12px;display:flex;align-items:center;justify-content:center">'+av+'</div>'
+    +'<div style="font-size:20px;font-weight:900;margin-bottom:4px">'+escHtml(u.username||'Utente')+'</div>'
+    +'<div style="font-size:12px;color:var(--accent2);font-weight:700;margin-bottom:14px">'+rankTitle(u.level||1)+' · Lv.'+(u.level||1)+'</div>'
+    +(preferredGenres.length?'<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:6px">Generi preferiti</div><div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center">'+preferredGenres.map(g=>'<span class="tag tag-cat">'+escHtml(g)+'</span>').join('')+'</div></div>':'')
+    +(commonBooks.length?'<div style="margin-bottom:16px;text-align:left"><div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:6px">📚 Libri in comune</div>'+commonBooks.map(b=>'<div class="friend-card" style="padding:8px 10px"><div class="book-title" style="font-size:12px">'+escHtml(b.emoji||'📖')+' '+escHtml(b.title)+'</div><div style="font-size:10px;color:var(--text3)">'+escHtml(b.author||'')+'</div></div>').join('')+'</div>':'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Nessun libro in comune trovato.</div>')
+    +(userBooks.length?'<div style="text-align:left"><div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:6px">📖 Tutti i libri ('+userBooks.length+')</div>'+userBooks.map(b=>'<div class="friend-card" style="padding:8px 10px"><div style="font-size:12px;font-weight:700">'+escHtml(b.emoji||'📖')+' '+escHtml(b.title)+'</div><div style="font-size:10px;color:var(--text3)">'+escHtml(b.genre||'—')+'</div></div>').join('')+'</div>':'')
+    +(!userId.includes(CUR.id)
+      ?(isFollowing
+        ?'<button class="btn btn-primary" style="opacity:0.7;margin-top:16px" onclick="unfollowUser(\''+userId+'\');closeModal(\'modal-profile\')">✓ Seguito · Smetti</button>'
+        :'<button class="btn btn-primary" style="margin-top:16px" onclick="followUser(\''+userId+'\',\''+escHtml(u.username||'')+'\');closeModal(\'modal-profile\')">➕ Segui</button>')
+      :'<button class="btn btn-primary" style="margin-top:16px" onclick="closeModal(\'modal-profile\')">Chiudi</button>')
+    +'</div>';
+  openModal('modal-profile');
+}
+
+      
+      
     });
   }
 }
@@ -1058,8 +1172,26 @@ function renderFriendsScreen(){
   h+='<div class="section-hd"><span class="section-title">Seguiti ('+followingCount+')</span></div>';
   if(following.length){
     following.forEach(fid=>{
+
+
+      
       const fu=getUser(fid);
-      const name=fu?escHtml(fu.username):fid;
+      const name=fu?escHtml(fu.username):'@'+fid;
+      // Se utente non è in DB locale, recuperalo dal cloud
+      if(!fu){
+        apiCall('GET_USER_DATA',{user_id:fid}).then(r=>{
+          if(r.success&&r.user){
+            if(!getUser(fid)) DB.users.push({...r.user,avatar:r.user.avatar_url||''});
+            saveDB(); renderFriendsScreen();
+          }
+        });
+      }
+
+
+
+
+
+      
       const av=fu?.avatar?'<img src="'+fu.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':name[0];
       h+='<div class="friend-card" style="display:flex;align-items:center;gap:10px">'
         +'<div class="feed-avatar" onclick="viewUserProfile(\''+fid+'\')">'+av+'</div>'
